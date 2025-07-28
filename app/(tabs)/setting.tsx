@@ -10,7 +10,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useCallback, useEffect, useState} from "react";
 import {FontAwesome} from "@expo/vector-icons";
 import {useAppDispatch, useAppSelector} from "@/app/store";
-import {setAutoRun, setAutoStopHours, setBackgroundMode, setICloudSync} from "@/app/store/setting";
+import {LibType, setAutoRun, setAutoStopHours, setBackgroundMode, setICloudSync, setLibType} from "@/app/store/setting";
 import ColorSchemeCard from "@/components/ColorSchemeCard";
 import Text from '@/components/ColorSchemeText'
 import {Colors} from "@/constants/Colors";
@@ -22,14 +22,17 @@ export default function Setting() {
   const [modalVisible, setModalVisible] = useState(false);
   const [version, setVersion] = useState('1.0')
   const [alistVersion, setAlistVersion] = useState('dev')
+  const [openListVersion, setOpenListVersion] = useState('dev')
   const backgroundMode = useAppSelector(state => state.setting.backgroundMode)
   const autoRun = useAppSelector(state => state.setting.autoRun)
   const iCloudSync = useAppSelector(state => state.setting.iCloudSync)
   const autoStopHours = useAppSelector(state => state.setting.autoStopHours) || 0
+  const libType = useAppSelector(state => state.setting.libType) || LibType.AList
   const dispatch = useAppDispatch()
   const colorScheme = useColorScheme()
   const [iCloudBackupLoading, setCloudBackupLoading] = useState<boolean>(false)
   const [userRecordId, setUserRecordId] = useState(null)
+  console.log('libType', libType)
 
   const showAbout = useCallback(() => {
     setModalVisible(true)
@@ -44,10 +47,19 @@ export default function Setting() {
     }
   }, []);
 
-  const getAlistVersion = useCallback(async () => {
+  const getAListVersion = useCallback(async () => {
     try {
-      const version = await Alist.getVersion();
+      const version = await Alist.getAListVersion();
       setAlistVersion(version)
+    } catch (error) {
+      console.error(error);
+    }
+  }, []);
+
+  const getOpenListVersion = useCallback(async () => {
+    try {
+      const version = await Alist.getOpenListVersion();
+      setOpenListVersion(version)
     } catch (error) {
       console.error(error);
     }
@@ -83,13 +95,36 @@ export default function Setting() {
     }
   }, [setCloudBackupLoading, dispatch])
 
+  const switchLibType = useCallback(() => {
+    const newLibType = libType === LibType.AList ? LibType.OpenList : LibType.AList
+    const newLibTypeText = {[LibType.AList]: `AList`, [LibType.OpenList]: `OpenList`}[newLibType]
+    Alert.alert(`切换至${newLibTypeText}`, `不同内核数据不互通\n切换后将自动退出App，请手动重启`, [
+      {
+        text: '取消',
+        style: 'cancel',
+      },
+      {text: '确认切换', onPress: async () => {
+        await Alist.setLibType(newLibType)
+        dispatch(setLibType(newLibType))
+        setTimeout(() => {
+          Alist.exit()
+        }, 250)
+      }},
+    ]);
+
+  }, [libType, alistVersion, openListVersion, iCloudSync])
+
   useEffect(() => {
     getAppVersion()
   }, [getAppVersion]);
 
   useEffect(() => {
-    getAlistVersion()
-  }, [getAlistVersion]);
+    getAListVersion()
+  }, [getAListVersion]);
+
+  useEffect(() => {
+    getOpenListVersion()
+  }, [getOpenListVersion]);
 
   useEffect(() => {
     NativeModules?.CloudKitManager?.getUserRecordID?.()
@@ -197,10 +232,15 @@ export default function Setting() {
             <Text style={styles.itemTitle}>App版本</Text>
             <Text>{version}</Text>
           </View>
-          <View style={[styles.cardItem]}>
-            <Text style={styles.itemTitle}>AList版本</Text>
-            <Text>{alistVersion}</Text>
-          </View>
+          <TouchableOpacity onPress={switchLibType}>
+            <View style={[styles.cardItem, styles.cardItemLarge]}>
+              <View>
+                <Text style={styles.itemTitle}>内核版本</Text>
+                <Text style={styles.itemDescription}>点击切换至{libType === LibType.AList ? `OpenList@${openListVersion}` : `AList@${alistVersion}`}</Text>
+              </View>
+              <Text>{libType === LibType.AList ? `AList@${alistVersion}` : `OpenList@${openListVersion}`}</Text>
+            </View>
+          </TouchableOpacity>
         </ColorSchemeCard>
         <Text style={[styles.cardTitle, styles.cardMarginTop]}>关于</Text>
         <ColorSchemeCard>

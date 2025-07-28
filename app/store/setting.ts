@@ -3,7 +3,11 @@ import {NativeModules} from "react-native";
 
 const {Alist} = NativeModules;
 
-type SettingState = { backgroundMode: boolean; autoRun: boolean; iCloudSync: boolean; autoStopHours: number;}
+export enum LibType {
+  AList = 0,
+  OpenList = 1,
+}
+type SettingState = { backgroundMode: boolean; autoRun: boolean; iCloudSync: boolean; autoStopHours: number; libType: LibType;}
 
 export const settingSlice = createSlice({
   name: 'setting',
@@ -12,6 +16,7 @@ export const settingSlice = createSlice({
     autoRun: false,
     iCloudSync: false,
     autoStopHours: 0,
+    libType: LibType.AList,
   } satisfies SettingState as SettingState,
   reducers: {
     setBackgroundMode(state, {payload}) {
@@ -28,6 +33,9 @@ export const settingSlice = createSlice({
       state.autoStopHours = payload;
       Alist.setAutoStopHours(payload)
     },
+    setLibType(state, {payload}) {
+      state.libType = payload;
+    },
   },
 });
 
@@ -36,6 +44,7 @@ export const {
   setAutoRun,
   setICloudSync,
   setAutoStopHours,
+  setLibType,
 } = settingSlice.actions;
 
 export default settingSlice.reducer;

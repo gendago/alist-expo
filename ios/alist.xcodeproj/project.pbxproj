@@ -10,6 +10,8 @@
 		0FC22CCC5AA4B1315450373C /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03804A1593C0612DAF52E5EB /* ExpoModulesProvider.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		2B237A302C6495350017B23E /* CloudKitManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B237A2F2C6495350017B23E /* CloudKitManager.m */; };
+		2B37C6622E1F63DB00245F29 /* MergedLib.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B37C6612E1F63DB00245F29 /* MergedLib.xcframework */; };
+		2B37C6632E1F63DB00245F29 /* MergedLib.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B37C6612E1F63DB00245F29 /* MergedLib.xcframework */; };
 		2B3F6E1B2C11552300470DDC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B3F6E1A2C11552300470DDC /* AppDelegate.swift */; };
 		2B79A6F02C1C2A9F00DE3BD6 /* Alist.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B79A6DC2C1C2A9F00DE3BD6 /* Alist.swift */; };
 		2B79A6F12C1C2A9F00DE3BD6 /* Alist.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B79A6DD2C1C2A9F00DE3BD6 /* Alist.m */; };
@@ -29,7 +31,6 @@
 		2B79A7002C1C2A9F00DE3BD6 /* AppInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B79A6EF2C1C2A9F00DE3BD6 /* AppInfo.m */; };
 		2B7CF7F72C2A55D100C2BB7E /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B7CF7F62C2A55D100C2BB7E /* NotificationManager.swift */; };
 		2B7CF7FA2C2A636200C2BB7E /* NotificationManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B7CF7F92C2A636200C2BB7E /* NotificationManager.m */; };
-		2B82A2612BF5EFA500E4F0F5 /* Alistlib.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B82A2602BF5EFA500E4F0F5 /* Alistlib.xcframework */; };
 		2B8F03472C5D2F030000F134 /* CloudKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8F03462C5D2F030000F134 /* CloudKitManager.swift */; };
 		2B9EECC32CE1F160002B43D5 /* VideoPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B79A6E12C1C2A9F00DE3BD6 /* VideoPlayer.swift */; };
 		2B9EECC42CE1F160002B43D5 /* AudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B79A6E42C1C2A9F00DE3BD6 /* AudioView.swift */; };
@@ -54,7 +55,6 @@
 		2B9EECD92CE1F160002B43D5 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2BBEDA5C2BF7A41800A07CF1 /* IOKit.framework */; };
 		2B9EECDA2CE1F160002B43D5 /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 2BBEDA582BF7A40D00A07CF1 /* libresolv.tbd */; };
 		2B9EECDB2CE1F160002B43D5 /* libresolv.9.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 2BBEDA592BF7A40D00A07CF1 /* libresolv.9.tbd */; };
-		2B9EECDC2CE1F160002B43D5 /* Alistlib.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2B82A2602BF5EFA500E4F0F5 /* Alistlib.xcframework */; };
 		2B9EECDF2CE1F160002B43D5 /* jm.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 2B79A6EB2C1C2A9F00DE3BD6 /* jm.mp3 */; };
 		2B9EECE02CE1F160002B43D5 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		2B9EECE12CE1F160002B43D5 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
@@ -77,6 +77,7 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = alist/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = alist/Info.plist; sourceTree = "<group>"; };
 		2B237A2F2C6495350017B23E /* CloudKitManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CloudKitManager.m; sourceTree = "<group>"; };
+		2B37C6612E1F63DB00245F29 /* MergedLib.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = MergedLib.xcframework; path = alist/MergedLib.xcframework; sourceTree = "<group>"; };
 		2B3F6E1A2C11552300470DDC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		2B79A6DC2C1C2A9F00DE3BD6 /* Alist.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Alist.swift; sourceTree = "<group>"; };
 		2B79A6DD2C1C2A9F00DE3BD6 /* Alist.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Alist.m; sourceTree = "<group>"; };
@@ -96,7 +97,6 @@
 		2B79A6EF2C1C2A9F00DE3BD6 /* AppInfo.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AppInfo.m; sourceTree = "<group>"; };
 		2B7CF7F62C2A55D100C2BB7E /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
 		2B7CF7F92C2A636200C2BB7E /* NotificationManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NotificationManager.m; sourceTree = "<group>"; };
-		2B82A2602BF5EFA500E4F0F5 /* Alistlib.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Alistlib.xcframework; path = alist/Alistlib.xcframework; sourceTree = "<group>"; };
 		2B8F03462C5D2F030000F134 /* CloudKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitManager.swift; sourceTree = "<group>"; };
 		2B9EECEB2CE1F160002B43D5 /* alist-without-icloud.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "alist-without-icloud.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2BBEDA582BF7A40D00A07CF1 /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
@@ -121,7 +121,7 @@
 				2BBEDA5D2BF7A41800A07CF1 /* IOKit.framework in Frameworks */,
 				2BBEDA5A2BF7A40D00A07CF1 /* libresolv.tbd in Frameworks */,
 				2BBEDA5B2BF7A40D00A07CF1 /* libresolv.9.tbd in Frameworks */,
-				2B82A2612BF5EFA500E4F0F5 /* Alistlib.xcframework in Frameworks */,
+				2B37C6632E1F63DB00245F29 /* MergedLib.xcframework in Frameworks */,
 				3DA8A76CB5B739479397D401 /* Pods_alist.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -133,7 +133,7 @@
 				2B9EECD92CE1F160002B43D5 /* IOKit.framework in Frameworks */,
 				2B9EECDA2CE1F160002B43D5 /* libresolv.tbd in Frameworks */,
 				2B9EECDB2CE1F160002B43D5 /* libresolv.9.tbd in Frameworks */,
-				2B9EECDC2CE1F160002B43D5 /* Alistlib.xcframework in Frameworks */,
+				2B37C6622E1F63DB00245F29 /* MergedLib.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -143,8 +143,8 @@
 		13B07FAE1A68108700A75B9A /* alist */ = {
 			isa = PBXGroup;
 			children = (
+				2B37C6612E1F63DB00245F29 /* MergedLib.xcframework */,
 				2BED6E8D2D0751E30072CD1C /* alist copy-Info.plist */,
-				2B82A2602BF5EFA500E4F0F5 /* Alistlib.xcframework */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -757,7 +757,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.23;
+				MARKETING_VERSION = 2.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -798,7 +798,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.23;
+				MARKETING_VERSION = 2.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -836,7 +836,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.23;
+				MARKETING_VERSION = 2.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -875,7 +875,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.23;
+				MARKETING_VERSION = 2.1;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

@@ -104,6 +104,10 @@ const AListWebview = forwardRef((props: AListWebViewProps, forwardedRef: Forward
     AppInfo.getApplicationQueriesSchemes().then(setSchemes)
   }, []);
 
+  useEffect(() => {
+    setInjectedJS('');
+  }, [isRunning]);
+
   return isRunning ? injectedJS ? (
       <WebView
         source={{ uri: url }}

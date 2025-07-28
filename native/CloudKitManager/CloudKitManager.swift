@@ -2,7 +2,7 @@
 #if WITH_ICLOUD
 import Foundation
 import CloudKit
-import Alistlib
+import MergedLib
 
 @objc(CloudKitManager)
 class CloudKitManager: NSObject {
@@ -11,9 +11,16 @@ class CloudKitManager: NSObject {
     return container.privateCloudDatabase
   }
   private var userRecordId: String = "";
-  private let recordType = "backup"
+  private var recordType: String {
+    let libType = UserDefaults.standard.integer(forKey: "libType")
+    return libType == 0 ? "backup" : "openlist_backup"
+  }
   public var restoring = false
   public static let shared = CloudKitManager()
+  var recordID: CKRecord.ID  {
+    let libType = UserDefaults.standard.integer(forKey: "libType")
+    return CKRecord.ID(recordName: libType == 0 ? "alist_backup" : "openlist")
+  }
   
   override init () {
     super.init()
@@ -47,7 +54,7 @@ class CloudKitManager: NSObject {
   
   func subscription() {
     let predicate = NSPredicate(value: true)
-    let subscription = CKQuerySubscription(recordType: recordType, predicate: predicate, subscriptionID: "backup", options: [CKQuerySubscription.Options.firesOnRecordDeletion, CKQuerySubscription.Options.firesOnRecordCreation, CKQuerySubscription.Options.firesOnRecordUpdate])
+    let subscription = CKQuerySubscription(recordType: recordType, predicate: predicate, subscriptionID: recordType, options: [CKQuerySubscription.Options.firesOnRecordDeletion, CKQuerySubscription.Options.firesOnRecordCreation, CKQuerySubscription.Options.firesOnRecordUpdate])
 
     let notificationInfo = CKSubscription.NotificationInfo()
     // 开启静默推送
@@ -61,10 +68,8 @@ class CloudKitManager: NSObject {
   
   func saveRecord(recordFields: [String: Any], resolve: @escaping (Any) -> Void, reject: @escaping (String) -> Void) {
     if self.userRecordId != "" {
-      let recordID = CKRecord.ID(recordName: "alist_backup")
-      
       publicDB.fetch(withRecordID: recordID) { (fetchedRecord, error) in
-        if let record = error == nil ? fetchedRecord : CKRecord(recordType: self.recordType, recordID: recordID) {
+        if let record = error == nil ? fetchedRecord : CKRecord(recordType: self.recordType, recordID: self.recordID) {
           recordFields.forEach { (key, value) in
             record[key] = value as? CKRecordValue
           }
@@ -86,7 +91,8 @@ class CloudKitManager: NSObject {
   }
   
   func queryRecord(options: NSDictionary?, resolve: @escaping (Any) -> Void, reject: @escaping (String) -> Void) {
-    let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
+    let predicate = NSPredicate(format: "recordID == %@", recordID)
+    let query = CKQuery(recordType: recordType, predicate: predicate)
     
     if let sortField = options?["sortField"] as? String, let ascending = options?["ascending"] as? Bool {
       query.sortDescriptors = [NSSortDescriptor(key: sortField, ascending: ascending)]
@@ -122,7 +128,7 @@ class CloudKitManager: NSObject {
       if let records = data as? [[String: Any]], // 尝试转换类型
          let firstRecord = records.first, // 现在可以安全地调用.first
          let jsonString = firstRecord["json"] as? String { // 尝试从第一条记录中获取json字段
-        AlistlibRestore(jsonString)
+        MergedlibRestore(jsonString)
         print("恢复数据成功")
         resolve("ok")
       } else {
@@ -141,7 +147,7 @@ class CloudKitManager: NSObject {
   }
   
   func backup(resolve: @escaping (Any) -> Void, reject: @escaping (String) -> Void) {
-    let data = AlistlibBackup()
+    let data = MergedlibBackup()
     self.saveRecord(recordFields: ["json" : data]) { _ in
       print("备份数据成功")
       resolve("ok")

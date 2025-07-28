@@ -1,9 +1,9 @@
 // GoLibraryBridge.swift
 import Foundation
 import React
-import Alistlib // 导入Go库
+import MergedLib
 
-class EventListener: NSObject, AlistlibEventProtocol {
+class EventListener: NSObject, MergedlibEventProtocol {
     private var onProcessExitCallack: RCTResponseSenderBlock?
     private var onShutdownCallback: RCTResponseSenderBlock?
     private var onStartErrorCallback: RCTResponseSenderBlock?
@@ -30,7 +30,7 @@ class EventListener: NSObject, AlistlibEventProtocol {
     }
 }
 
-class LogCallbackHandler: NSObject, AlistlibLogCallbackProtocol {
+class LogCallbackHandler: NSObject, MergedlibLogCallbackProtocol {
     private var onLogCallback: RCTResponseSenderBlock? // 用于存储JavaScript的回调函数
 
     init(onLog: @escaping RCTResponseSenderBlock) {
@@ -43,7 +43,7 @@ class LogCallbackHandler: NSObject, AlistlibLogCallbackProtocol {
     }
 }
 
-class DataChangeCallbackHandler: NSObject, AlistlibDataChangeCallbackProtocol {
+class DataChangeCallbackHandler: NSObject, MergedlibDataChangeCallbackProtocol {
   var debounceTimer: Timer?
   func onChange(_ model: String?) {
     #if WITH_ICLOUD
@@ -57,7 +57,7 @@ class DataChangeCallbackHandler: NSObject, AlistlibDataChangeCallbackProtocol {
     DispatchQueue.main.async {
       self.debounceTimer?.invalidate()
       self.debounceTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: false, block: { (timer) in
-        let data = AlistlibBackup()
+        let data = MergedlibBackup()
         CloudKitManager.shared.saveRecord(recordFields: ["json" : data]) { _ in
           print("备份数据成功")
         } reject: { msg in
@@ -73,7 +73,9 @@ class DataChangeCallbackHandler: NSObject, AlistlibDataChangeCallbackProtocol {
 class Alist: RCTEventEmitter {
   @objc func `init`(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-
+    let libType = UserDefaults.standard.integer(forKey: "libType")
+    MergedlibSetLibType(libType)
+    
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 
     let eventListener = EventListener(
@@ -94,9 +96,9 @@ class Alist: RCTEventEmitter {
 
     // 初始化 NSError 的指针
     var error: NSError?
-    AlistlibSetConfigData(documentsDirectory.path)
-    AlistlibSetConfigLogStd(true)
-    AlistlibInit(eventListener, logCallbackHandler, &error)
+    MergedlibSetConfigData(libType == 0 ? documentsDirectory.path : documentsDirectory.appendingPathComponent("OpenList").path)
+    MergedlibSetConfigLogStd(true)
+    MergedlibInit(eventListener, logCallbackHandler, &error)
     if (error == nil) {
       resolve("ok")
     } else {
@@ -107,14 +109,14 @@ class Alist: RCTEventEmitter {
   @objc func start(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
     let dataChangeCallbackHandler = DataChangeCallbackHandler()
-    AlistlibStart(dataChangeCallbackHandler)
+    MergedlibStart(dataChangeCallbackHandler)
     resolve("ok")
   }
 
   @objc func stop(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
     var error: NSError?
-    AlistlibShutdown(0, &error)
+    MergedlibShutdown(0, &error)
 
     if (error == nil) {
       NotificationManager.shared.removeNotification()
@@ -126,32 +128,32 @@ class Alist: RCTEventEmitter {
 
   @objc func isRunning(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    resolve(AlistlibIsRunning("http"))
+    resolve(MergedlibIsRunning("http"))
   }
 
   @objc func getAdminPassword(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    resolve(AlistlibGetAdminPassword())
+    resolve(MergedlibGetAdminPassword())
   }
 
   @objc func getAdminUsername(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    resolve(AlistlibGetAdminUsername())
+    resolve(MergedlibGetAdminUsername())
   }
   
   @objc func getAdminToken(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    resolve(AlistlibGetAdminToken())
+    resolve(MergedlibGetAdminToken())
   }
 
   @objc func getOutboundIPString(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    resolve(AlistlibGetOutboundIPString())
+    resolve(MergedlibGetOutboundIPString())
   }
 
   @objc func setAdminPassword(_ password: String, resolver resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    AlistlibSetAdminPassword(password)
+    MergedlibSetAdminPassword(password)
     resolve("ok")
   }
   
@@ -188,12 +190,34 @@ class Alist: RCTEventEmitter {
   
   @objc func setAutoStopHours(_ value: NSNumber, resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    AlistlibSetAutoStopHours(Int(value.intValue))
+    MergedlibSetAutoStopHours(Int(value.intValue))
   }
   
   @objc func getVersion(_ resolve: @escaping RCTPromiseResolveBlock,
                             rejecter reject: @escaping RCTPromiseRejectBlock) {
-    resolve(AlistlibGetVersion())
+    resolve(MergedlibGetVersion())
+  }
+  
+  @objc func getAListVersion(_ resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+    resolve(MergedlibGetAListVersion())
+  }
+  
+  @objc func getOpenListVersion(_ resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+    resolve(MergedlibGetOpenListVersion())
+  }
+  
+  @objc func setLibType(_ value: NSNumber, resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+    UserDefaults.standard.set(value, forKey: "libType")
+    MergedlibSetLibType(Int(truncating: value))
+    resolve("ok")
+  }
+  
+  @objc func exit(_ resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+    _stdlib.exit(0)
   }
 
   // React Native桥接需要的因素

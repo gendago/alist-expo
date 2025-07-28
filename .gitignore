@@ -20,4 +20,6 @@ expo-env.d.ts
 # @end expo-cli
 .idea/
 ios/alist/Alistlib.xcframework/
+ios/alist/Openlistlib.xcframework/
+ios/alist/MergedLib.xcframework/
 unsigned.xcarchive
