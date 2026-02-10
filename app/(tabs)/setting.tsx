@@ -4,7 +4,8 @@ import {
   Switch,
   TouchableOpacity,
   Modal,
-  Linking, TouchableWithoutFeedback, NativeModules, useColorScheme, ActivityIndicator, ScrollView, Alert
+  Linking, TouchableWithoutFeedback, NativeModules, useColorScheme, ActivityIndicator, ScrollView, Alert,
+  Platform
 } from 'react-native';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useCallback, useEffect, useState} from "react";
@@ -17,6 +18,7 @@ import {Colors} from "@/constants/Colors";
 import Toast from "react-native-root-toast";
 
 const { AppInfo, NotificationManager, Alist } = NativeModules;
+const systemVersion = Number(Platform.Version)
 
 export default function Setting() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -143,7 +145,7 @@ export default function Setting() {
             </View>
             <Switch
               trackColor={{false: '#767577', true: '#81b0ff'}}
-              ios_backgroundColor="#3e3e3e"
+              ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
               onValueChange={(value) => {
                 dispatch(setBackgroundMode(value))
               }}
@@ -196,7 +198,7 @@ export default function Setting() {
             </View>
             <Switch
                 trackColor={{false: '#767577', true: '#81b0ff'}}
-                ios_backgroundColor="#3e3e3e"
+                ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
                 onValueChange={(value) => {
                   if (value) {
                     NotificationManager.requestAuthorization()
@@ -218,7 +220,7 @@ export default function Setting() {
                   {userRecordId ? iCloudBackupLoading ?  <ActivityIndicator style={{marginRight: 16}}/> : (
                       <Switch
                           trackColor={{false: '#767577', true: '#81b0ff'}}
-                          ios_backgroundColor="#3e3e3e"
+                          ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
                           onValueChange={iCloudSwitchChange}
                           value={iCloudSync || iCloudBackupLoading}
                       />

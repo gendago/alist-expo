@@ -214,11 +214,6 @@ class Alist: RCTEventEmitter {
     MergedlibSetLibType(Int(truncating: value))
     resolve("ok")
   }
-  
-  @objc func exit(_ resolve: @escaping RCTPromiseResolveBlock,
-                            rejecter reject: @escaping RCTPromiseRejectBlock) {
-    _stdlib.exit(0)
-  }
 
   // React Native桥接需要的因素
   @objc override static func requiresMainQueueSetup() -> Bool {
