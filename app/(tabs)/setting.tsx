@@ -18,7 +18,7 @@ import {Colors} from "@/constants/Colors";
 import Toast from "react-native-root-toast";
 
 const { AppInfo, NotificationManager, Alist } = NativeModules;
-const systemVersion = Number(Platform.Version)
+const systemVersion = Number(Platform.Version?.split('.')?.[0])
 
 export default function Setting() {
   const [modalVisible, setModalVisible] = useState(false);

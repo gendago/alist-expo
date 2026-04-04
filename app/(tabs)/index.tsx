@@ -19,11 +19,10 @@ import Toast from "react-native-root-toast";
 import Text from '@/components/ColorSchemeText'
 import ColorSchemeCard from "@/components/ColorSchemeCard";
 import axios from "axios/index";
-import RNFS from "react-native-fs";
 
 const {Alist, NotificationManager, AppInfo} = NativeModules;
 const DEFAULT_PASSWORD = 'admin'
-const systemVersion = Number(Platform.Version)
+const systemVersion = Number(Platform.Version?.split('.')?.[0])
 
 export default function HomeScreen() {
   const isRunning = useAppSelector(state => state.server.isRunning)
