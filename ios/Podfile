@@ -20,9 +20,6 @@ target 'alist' do
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
   use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
   use_frameworks!
-  pod 'KSPlayer',:git => 'https://github.com/kingslay/KSPlayer.git', :commit => '4d9b90066de3b976687fbc65372be0d8109675a7'
-  pod 'FFmpegKit',:git => 'https://github.com/kingslay/FFmpegKit.git', :commit => '09368496e95d450c5abec61936edd467ed2e2436'
-  pod 'OpenSSL',:git => 'https://github.com/kingslay/FFmpegKit.git', :commit => '09368496e95d450c5abec61936edd467ed2e2436'
 
   use_react_native!(
     :path => config[:reactNativePath],

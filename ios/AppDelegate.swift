@@ -61,10 +61,6 @@ class AppDelegate: EXAppDelegateWrapper {
         #endif
         super.application(application, didReceiveRemoteNotification: userInfo, fetchCompletionHandler: completionHandler)
     }
-
-    override func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        return PlayerViewInstance.supportedInterfaceOrientations
-    }
   
     override func applicationWillTerminate(_ application: UIApplication) {
         NotificationManager.shared.removeNotification()
