@@ -158,7 +158,7 @@ export default function HomeScreen() {
             <Switch
               trackColor={{false: '#767577', true: '#81b0ff'}}
               thumbColor={isRunning ? '#f5dd4b' : '#f4f3f4'}
-              ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
+              ios_backgroundColor={systemVersion >= 26 ? undefined : "#3e3e3e"}
               onValueChange={toggleSwitch}
               value={isRunning || loading}
             />

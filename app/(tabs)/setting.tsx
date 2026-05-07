@@ -145,7 +145,7 @@ export default function Setting() {
             </View>
             <Switch
               trackColor={{false: '#767577', true: '#81b0ff'}}
-              ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
+              ios_backgroundColor={systemVersion >= 26 ? undefined : "#3e3e3e"}
               onValueChange={(value) => {
                 dispatch(setBackgroundMode(value))
               }}
@@ -198,7 +198,7 @@ export default function Setting() {
             </View>
             <Switch
                 trackColor={{false: '#767577', true: '#81b0ff'}}
-                ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
+                ios_backgroundColor={systemVersion >= 26 ? undefined : "#3e3e3e"}
                 onValueChange={(value) => {
                   if (value) {
                     NotificationManager.requestAuthorization()
@@ -220,7 +220,7 @@ export default function Setting() {
                   {userRecordId ? iCloudBackupLoading ?  <ActivityIndicator style={{marginRight: 16}}/> : (
                       <Switch
                           trackColor={{false: '#767577', true: '#81b0ff'}}
-                          ios_backgroundColor={systemVersion > 26 ? undefined : "#3e3e3e"}
+                          ios_backgroundColor={systemVersion >= 26 ? undefined : "#3e3e3e"}
                           onValueChange={iCloudSwitchChange}
                           value={iCloudSync || iCloudBackupLoading}
                       />
