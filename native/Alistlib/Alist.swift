@@ -2,6 +2,7 @@
 import Foundation
 import React
 import MergedLib
+import Darwin
 
 class EventListener: NSObject, MergedlibEventProtocol {
     private var onProcessExitCallack: RCTResponseSenderBlock?
@@ -213,6 +214,14 @@ class Alist: RCTEventEmitter {
     UserDefaults.standard.set(value, forKey: "libType")
     MergedlibSetLibType(Int(truncating: value))
     resolve("ok")
+  }
+  
+  @objc func exit(_ resolve: @escaping RCTPromiseResolveBlock,
+                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+    resolve("ok")
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+      Darwin.exit(0)
+    }
   }
 
   // React Native桥接需要的因素
