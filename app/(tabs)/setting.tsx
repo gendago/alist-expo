@@ -5,12 +5,12 @@ import {
   TouchableOpacity,
   Modal,
   Linking, TouchableWithoutFeedback, NativeModules, useColorScheme, ActivityIndicator, ScrollView, Alert,
-  Platform
+  Platform, ActionSheetIOS
 } from 'react-native';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useCallback, useEffect, useState} from "react";
 import {FontAwesome} from "@expo/vector-icons";
-import {useAppDispatch, useAppSelector} from "@/app/store";
+import {persistor, useAppDispatch, useAppSelector} from "@/app/store";
 import {LibType, setAutoRun, setAutoStopHours, setBackgroundMode, setICloudSync, setLibType} from "@/app/store/setting";
 import ColorSchemeCard from "@/components/ColorSchemeCard";
 import Text from '@/components/ColorSchemeText'
@@ -97,8 +97,10 @@ export default function Setting() {
     }
   }, [setCloudBackupLoading, dispatch])
 
-  const switchLibType = useCallback(() => {
-    const newLibType = libType === LibType.AList ? LibType.OpenList : LibType.AList
+  const confirmLibTypeChange = useCallback((newLibType: LibType) => {
+    if (newLibType === libType) {
+      return
+    }
     const newLibTypeText = {[LibType.AList]: `AList`, [LibType.OpenList]: `OpenList`}[newLibType]
     Alert.alert(`切换至${newLibTypeText}`, `不同内核数据不互通\n切换后将自动退出App，请手动重启`, [
       {
@@ -106,15 +108,40 @@ export default function Setting() {
         style: 'cancel',
       },
       {text: '确认切换', onPress: async () => {
-        await Alist.setLibType(newLibType)
-        dispatch(setLibType(newLibType))
-        setTimeout(() => {
-          Alist.exit()
-        }, 250)
+        try {
+          await Alist.setLibType(newLibType)
+          dispatch(setLibType(newLibType))
+          await persistor.flush()
+          await Alist.exit()
+        } catch (error: any) {
+          Alert.alert('切换失败', error?.message ?? '无法切换内核，请稍后重试')
+        }
       }},
     ]);
+  }, [dispatch, libType])
 
-  }, [libType, alistVersion, openListVersion, iCloudSync])
+  const showLibTypePicker = useCallback(() => {
+    const options = [`AList@${alistVersion}`, `OpenList@${openListVersion}`, '取消']
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions({
+        options,
+        cancelButtonIndex: 2,
+        disabledButtonIndices: [libType],
+        title: '选择内核',
+      }, (buttonIndex) => {
+        if (buttonIndex === LibType.AList || buttonIndex === LibType.OpenList) {
+          confirmLibTypeChange(buttonIndex)
+        }
+      })
+      return
+    }
+
+    Alert.alert('选择内核', undefined, [
+      {text: options[LibType.AList], onPress: () => confirmLibTypeChange(LibType.AList)},
+      {text: options[LibType.OpenList], onPress: () => confirmLibTypeChange(LibType.OpenList)},
+      {text: '取消', style: 'cancel'},
+    ])
+  }, [alistVersion, confirmLibTypeChange, libType, openListVersion])
 
   useEffect(() => {
     getAppVersion()
@@ -230,19 +257,23 @@ export default function Setting() {
         </ColorSchemeCard>
         <Text style={[styles.cardTitle, styles.cardMarginTop]}>版本信息</Text>
         <ColorSchemeCard>
-          <View style={styles.cardItem}>
-            <Text style={styles.itemTitle}>App版本</Text>
-            <Text>{version}</Text>
+          <View style={styles.versionItem}>
+            <Text style={[styles.itemTitle, styles.itemContent]}>App版本</Text>
+            <Text style={styles.versionValue}>{version}</Text>
           </View>
-          <TouchableOpacity onPress={switchLibType}>
-            <View style={[styles.cardItem, styles.cardItemLarge]}>
-              <View>
-                <Text style={styles.itemTitle}>内核版本</Text>
-                <Text style={styles.itemDescription}>点击切换至{libType === LibType.AList ? `OpenList@${openListVersion}` : `AList@${alistVersion}`}</Text>
-              </View>
-              <Text>{libType === LibType.AList ? `AList@${alistVersion}` : `OpenList@${openListVersion}`}</Text>
-            </View>
-          </TouchableOpacity>
+          <View style={styles.versionItem}>
+            <Text style={[styles.itemTitle, styles.itemContent]}>内核版本</Text>
+            <TouchableOpacity
+              accessibilityLabel="选择内核"
+              accessibilityRole="button"
+              accessibilityValue={{text: libType === LibType.AList ? `AList@${alistVersion}` : `OpenList@${openListVersion}`}}
+              onPress={showLibTypePicker}
+              style={styles.libPicker}
+            >
+              <Text style={styles.libPickerValue}>{libType === LibType.AList ? `AList@${alistVersion}` : `OpenList@${openListVersion}`}</Text>
+              <Ionicons name="chevron-down-outline" color="gray" size={16}/>
+            </TouchableOpacity>
+          </View>
         </ColorSchemeCard>
         <Text style={[styles.cardTitle, styles.cardMarginTop]}>关于</Text>
         <ColorSchemeCard>
@@ -338,6 +369,31 @@ const styles = StyleSheet.create({
   cardItemLarge: {
     height: 65,
   },
+  versionItem: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 50,
+    paddingVertical: 12,
+  },
+  versionValue: {
+    flexShrink: 1,
+    maxWidth: '50%',
+    textAlign: 'right',
+  },
+  libPicker: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    maxWidth: '70%',
+    minHeight: 44,
+  },
+  libPickerValue: {
+    flexShrink: 1,
+    marginRight: 4,
+    textAlign: 'right',
+  },
   cardItemBorderBottom: {
     borderBottomWidth: 1,
     borderBottomColor: 'rgb(228, 228, 228)',
@@ -396,5 +452,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'gray',
     marginTop: 4,
+  },
+  itemContent: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 12,
   }
 });

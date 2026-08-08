@@ -10,6 +10,7 @@ import {
   PERSIST,
   PURGE,
   REGISTER,
+  persistStore,
 } from 'redux-persist';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import setting from "@/app/store/setting";
@@ -37,6 +38,8 @@ const store= configureStore({
       },
     }),
 });
+
+export const persistor = persistStore(store);
 
 export type RootState = ReturnType<typeof store.getState>
 export type AppDispatch = typeof store.dispatch

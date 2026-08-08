@@ -8,16 +8,13 @@ import { RootSiblingParent } from 'react-native-root-siblings';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import {Provider} from "react-redux";
-import store from "@/app/store";
+import store, {persistor} from "@/app/store";
 import {LogBox} from "react-native";
-import {persistStore} from "redux-persist";
 import {PersistGate} from "redux-persist/integration/react";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 LogBox.ignoreAllLogs(true);
-
-const persistor = persistStore(store);
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
