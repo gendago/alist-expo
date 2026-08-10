@@ -1,0 +1,34 @@
+{
+  "name": "alistserver-tf-automation-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "types": "wrangler types src/worker-configuration.d.ts",
+    "check:startup": "wrangler check startup --outfile /tmp/alistserver-tf-startup.cpuprofile",
+    "check:production-config": "node scripts/check-production-config.mjs",
+    "verify": "npm run typecheck && npm test && npm run check:startup && wrangler deploy --dry-run",
+    "dev": "wrangler dev --local --persist-to .wrangler/alistserver-tf-local",
+    "db:migrate:local": "wrangler d1 migrations apply alistserver-tf-automation --local --persist-to .wrangler/alistserver-tf-local",
+    "deploy": "node scripts/check-production-config.mjs && wrangler d1 migrations apply alistserver-tf-automation --remote && wrangler d1 migrations list alistserver-tf-automation --remote && wrangler deploy && node scripts/check-production-health.mjs"
+  },
+  "dependencies": {
+    "@apple/app-store-server-library": "3.1.0",
+    "jose": "^6.1.3",
+    "jsrsasign": "11.1.3",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
+    "@cloudflare/workers-types": "5.20260727.1",
+    "@types/jsrsasign": "10.5.15",
+    "@types/node": "25.9.5",
+    "@types/node-fetch": "2.6.13",
+    "miniflare": "4.20260722.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
+    "wrangler": "4.113.0"
+  }
+}

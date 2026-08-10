@@ -22,7 +22,7 @@ import axios from "axios/index";
 
 const {Alist, NotificationManager, AppInfo} = NativeModules;
 const DEFAULT_PASSWORD = 'admin'
-const systemVersion = Number(Platform.Version?.split('.')?.[0])
+const systemVersion = Number(String(Platform.Version).split('.')[0])
 
 export default function HomeScreen() {
   const isRunning = useAppSelector(state => state.server.isRunning)

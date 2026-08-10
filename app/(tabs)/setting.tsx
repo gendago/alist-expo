@@ -10,17 +10,20 @@ import {
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useCallback, useEffect, useState} from "react";
 import {FontAwesome} from "@expo/vector-icons";
-import {persistor, useAppDispatch, useAppSelector} from "@/app/store";
+import {useAppDispatch, useAppSelector} from "@/app/store";
 import {LibType, setAutoRun, setAutoStopHours, setBackgroundMode, setICloudSync, setLibType} from "@/app/store/setting";
 import ColorSchemeCard from "@/components/ColorSchemeCard";
 import Text from '@/components/ColorSchemeText'
 import {Colors} from "@/constants/Colors";
 import Toast from "react-native-root-toast";
+import {useRouter} from "expo-router";
+import {persistor} from "@/app/store";
 
 const { AppInfo, NotificationManager, Alist } = NativeModules;
-const systemVersion = Number(Platform.Version?.split('.')?.[0])
+const systemVersion = Number(String(Platform.Version).split('.')[0])
 
 export default function Setting() {
+  const router = useRouter()
   const [modalVisible, setModalVisible] = useState(false);
   const [version, setVersion] = useState('1.0')
   const [alistVersion, setAlistVersion] = useState('dev')
@@ -255,6 +258,27 @@ export default function Setting() {
               </View>
           ) : null}
         </ColorSchemeCard>
+        {Platform.OS === 'ios' ? (
+          <>
+            <Text style={[styles.cardTitle, styles.cardMarginTop]}>TestFlight</Text>
+            <ColorSchemeCard>
+              <TouchableOpacity onPress={() => router.push('/tf-application')}>
+                <View style={[styles.cardItem, styles.cardItemLarge]}>
+                  <View style={styles.itemContent}>
+                    <Text style={styles.itemTitle}>申请 TestFlight</Text>
+                    <Text style={styles.itemDescription}>App Store 用户自助申请测试资格</Text>
+                  </View>
+                  <Ionicons
+                    name={'chevron-forward-outline'}
+                    color={'#D1D1D6'}
+                    containerStyle={{alignSelf: 'center'}}
+                    size={16}
+                  />
+                </View>
+              </TouchableOpacity>
+            </ColorSchemeCard>
+          </>
+        ) : null}
         <Text style={[styles.cardTitle, styles.cardMarginTop]}>版本信息</Text>
         <ColorSchemeCard>
           <View style={styles.versionItem}>

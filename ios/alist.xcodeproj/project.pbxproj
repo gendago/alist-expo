@@ -50,6 +50,10 @@
 		2BED6E8F2D0751E30072CD1C /* alist copy-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 2BED6E8D2D0751E30072CD1C /* alist copy-Info.plist */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		5D90CC3DA36D41CA86945CB5 /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4A0C0BAEF2E43AF98E3347E /* noop-file.swift */; };
+		A17F00000000000000000001 /* TestFlightEligibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17F00000000000000000005 /* TestFlightEligibility.swift */; };
+		A17F00000000000000000002 /* TestFlightEligibility.m in Sources */ = {isa = PBXBuildFile; fileRef = A17F00000000000000000006 /* TestFlightEligibility.m */; };
+		A17F00000000000000000003 /* TestFlightEligibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17F00000000000000000005 /* TestFlightEligibility.swift */; };
+		A17F00000000000000000004 /* TestFlightEligibility.m in Sources */ = {isa = PBXBuildFile; fileRef = A17F00000000000000000006 /* TestFlightEligibility.m */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 /* End PBXBuildFile section */
 
@@ -77,6 +81,8 @@
 		2BBEDA5C2BF7A41800A07CF1 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		2BED6E8D2D0751E30072CD1C /* alist copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "alist copy-Info.plist"; sourceTree = "<group>"; };
 		3BC7C7ED899558EC81DBA0F5 /* Pods-alist.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-alist.release.xcconfig"; path = "Target Support Files/Pods-alist/Pods-alist.release.xcconfig"; sourceTree = "<group>"; };
+		A17F00000000000000000005 /* TestFlightEligibility.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = TestFlightEligibility.swift; sourceTree = "<group>"; };
+		A17F00000000000000000006 /* TestFlightEligibility.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestFlightEligibility.m; sourceTree = "<group>"; };
 		A8BEA116FF0DD888AF4F820D /* Pods_alist.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_alist.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = alist/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
@@ -141,6 +147,7 @@
 		2B79A6DA2C1C2A9F00DE3BD6 /* native */ = {
 			isa = PBXGroup;
 			children = (
+				A17F00000000000000000007 /* TestFlightEligibility */,
 				2B237A2E2C6495220017B23E /* CloudKitManager */,
 				2B7CF7F82C2A61CC00C2BB7E /* NotificationManager */,
 				2B79A6DB2C1C2A9F00DE3BD6 /* Alistlib */,
@@ -230,6 +237,15 @@
 				2B9EECEB2CE1F160002B43D5 /* alist-without-icloud.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A17F00000000000000000007 /* TestFlightEligibility */ = {
+			isa = PBXGroup;
+			children = (
+				A17F00000000000000000005 /* TestFlightEligibility.swift */,
+				A17F00000000000000000006 /* TestFlightEligibility.m */,
+			);
+			path = TestFlightEligibility;
 			sourceTree = "<group>";
 		};
 		B7235A5C6A669B94B9AB2CCA /* alist */ = {
@@ -633,6 +649,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2B3F6E1B2C11552300470DDC /* AppDelegate.swift in Sources */,
+				A17F00000000000000000001 /* TestFlightEligibility.swift in Sources */,
+				A17F00000000000000000002 /* TestFlightEligibility.m in Sources */,
 				2B79A7002C1C2A9F00DE3BD6 /* AppInfo.m in Sources */,
 				2B79A6FC2C1C2A9F00DE3BD6 /* HCKeepBGRunManager.swift in Sources */,
 				2B7CF7FA2C2A636200C2BB7E /* NotificationManager.m in Sources */,
@@ -653,6 +671,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				2B9EECC72CE1F160002B43D5 /* AppDelegate.swift in Sources */,
+				A17F00000000000000000003 /* TestFlightEligibility.swift in Sources */,
+				A17F00000000000000000004 /* TestFlightEligibility.m in Sources */,
 				2B9EECCB2CE1F160002B43D5 /* AppInfo.m in Sources */,
 				2B9EECCC2CE1F160002B43D5 /* HCKeepBGRunManager.swift in Sources */,
 				2B9EECCD2CE1F160002B43D5 /* NotificationManager.m in Sources */,

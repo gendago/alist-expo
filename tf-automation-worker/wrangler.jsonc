@@ -1,0 +1,107 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "alistserver-tf-automation",
+  "main": "src/index.ts",
+  "tsconfig": "./tsconfig.json",
+  "compatibility_date": "2026-07-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [
+    {
+      "pattern": "alistserver.99999987.xyz",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *", "17 3 * * *"]
+  },
+  "vars": {
+    "APP_KEY": "alist",
+    "APP_NAME": "AListServer",
+    "BUNDLE_ID": "com.gendago.alist",
+    "APP_APPLE_ID": "6502905107",
+    "ASC_APP_ID": "6502905107",
+    "ASC_BETA_GROUP_ID": "c7ca74ed-8a19-4c4b-9a81-ad3d4b235081",
+    "PUBLIC_ORIGIN": "https://alistserver.99999987.xyz",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAD-y1SlMIaY-WJLj",
+    "AUTO_APPLY_ENABLED": "true",
+    "PUBLIC_SESSION_ENABLED": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "alistserver-tf-automation",
+      "database_id": "d10d3411-16e3-4e2d-950e-da185a6c0e40",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "AListRateLimiter"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "alistserver-v1",
+      "new_sqlite_classes": ["AListRateLimiter"]
+    }
+  ],
+  "secrets_store_secrets": [
+    {
+      "binding": "APPLE_ISSUER_ID",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "IAP_ISSUER_ID"
+    },
+    {
+      "binding": "APPLE_KEY_ID",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "IAP_KEY_ID"
+    },
+    {
+      "binding": "APPLE_PRIVATE_KEY",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "IAP_PRIVATE_KEY"
+    },
+    {
+      "binding": "ASC_ISSUER_ID",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ASC_ISSUER_ID"
+    },
+    {
+      "binding": "ASC_KEY_ID",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ASC_KEY_ID"
+    },
+    {
+      "binding": "ASC_PRIVATE_KEY",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ASC_PRIVATE_KEY"
+    },
+    {
+      "binding": "TURNSTILE_SECRET",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ALIST_TF_TURNSTILE_SECRET"
+    },
+    {
+      "binding": "TRANSACTION_HASH_SECRET",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ALIST_TF_TRANSACTION_HASH_SECRET"
+    },
+    {
+      "binding": "EMAIL_DATA_SECRET",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ALIST_TF_EMAIL_DATA_SECRET"
+    },
+    {
+      "binding": "IP_HASH_SECRET",
+      "store_id": "ea5dd611ede94e1fbad424b9d21d9e9f",
+      "secret_name": "ALIST_TF_IP_HASH_SECRET"
+    }
+  ]
+}
