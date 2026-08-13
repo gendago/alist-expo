@@ -59,7 +59,12 @@ export default function TestFlightApplication() {
   if (state.kind === 'web') {
     return (
       <>
-        <Stack.Screen options={{title: '申请 TestFlight'}} />
+        <Stack.Screen
+          options={{
+            title: '申请 TestFlight',
+            headerBackTitleVisible: false,
+          }}
+        />
         <TestFlightApplicationWebView
           applyURL={state.applicationURL}
           onRecoverableError={() => void loadCredential()}
@@ -71,7 +76,12 @@ export default function TestFlightApplication() {
   const backgroundColor = Colors[colorScheme ?? 'light'].background;
   return (
     <View style={[styles.container, {backgroundColor}]}>
-      <Stack.Screen options={{title: '申请 TestFlight'}} />
+      <Stack.Screen
+        options={{
+          title: '申请 TestFlight',
+          headerBackTitleVisible: false,
+        }}
+      />
       {state.kind === 'loading' ? (
         <View style={styles.centered}>
           <View style={styles.loadingIcon}>
