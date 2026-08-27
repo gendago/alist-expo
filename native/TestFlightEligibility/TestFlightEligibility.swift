@@ -73,7 +73,8 @@ private extension TestFlightEligibility {
           Bundle.main.bundleIdentifier == expectedBundleID else {
       throw EligibilityError.invalidTransaction
     }
-    guard transaction.environment == .production else {
+    guard transaction.environment == .production
+            || transaction.environment == .sandbox else {
       throw EligibilityError.nonProduction
     }
 
