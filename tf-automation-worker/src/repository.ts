@@ -74,6 +74,7 @@ export interface WebRebindOperationRow {
   max_attempts: number;
   compensation_attempt_count: number;
   max_compensation_attempts: number;
+  counts_as_rebind: number;
 }
 
 export const OPERATION_LEASE_MS = 240_000;
@@ -532,7 +533,7 @@ export async function findActiveWebRebindOperation(
       expected_rebind_count, stage, asc_stage, attempt_count, next_attempt_at,
       target_group_id, terminal_state, compensation_stage, error_kind,
       last_error, last_http_status, last_asc_code, max_attempts,
-      compensation_attempt_count, max_compensation_attempts
+      compensation_attempt_count, max_compensation_attempts, counts_as_rebind
      FROM tf_web_rebind_operations
      WHERE app_key = ? AND app_transaction_id_hmac = ?
        AND terminal_state = 'active'`,
@@ -546,15 +547,17 @@ export async function createWebRebindOperation(
   targetEmailCiphertext: string,
   now: number,
   targetGroupId: string = env.ASC_BETA_GROUP_ID,
+  countsAsRebind: boolean = binding.status === "active",
 ): Promise<WebRebindOperationRow | null> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT OR IGNORE INTO tf_web_rebind_operations(
        id, app_key, binding_id, app_transaction_id_hmac, from_email_hmac,
        target_email_hmac, target_email_ciphertext, old_tester_id,
-       expected_rebind_count, stage, target_group_id, next_attempt_at, created_at, updated_at
+       expected_rebind_count, stage, target_group_id, counts_as_rebind,
+       next_attempt_at, created_at, updated_at
      )
-     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', ?, ?, ?, ?
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', ?, ?, ?, ?, ?
      WHERE NOT EXISTS (
        SELECT 1 FROM tf_bindings
        WHERE app_key = ? AND email_hmac = ? AND id != ?
@@ -570,6 +573,7 @@ export async function createWebRebindOperation(
     binding.asc_tester_id,
     binding.rebind_count,
     targetGroupId,
+    countsAsRebind ? 1 : 0,
     now,
     now,
     now,
@@ -732,7 +736,7 @@ export async function recordWebRebindFailure(
       expected_rebind_count, stage, asc_stage, attempt_count, next_attempt_at,
       target_group_id, terminal_state, compensation_stage, error_kind,
       last_error, last_http_status, last_asc_code, max_attempts,
-      compensation_attempt_count, max_compensation_attempts
+      compensation_attempt_count, max_compensation_attempts, counts_as_rebind
      FROM tf_web_rebind_operations WHERE id = ? AND app_key = ?`,
   ).bind(id, env.APP_KEY).first<WebRebindOperationRow>();
 }
@@ -835,19 +839,22 @@ export async function completeWebRebind(
     env.DB.prepare(
       `UPDATE tf_bindings SET email_hmac = ?, email_ciphertext = ?,
         asc_tester_id = ?, status = 'active', asc_stage = 'rebind_invited',
-        beta_group_id = ?, rebind_count = rebind_count + 1, updated_at = ?
+        beta_group_id = ?, rebind_count = rebind_count + ?, updated_at = ?
        WHERE id = ? AND app_key = ? AND status != 'revoked'
-         AND email_hmac = ? AND rebind_count = ? AND rebind_count < 2`,
+         AND email_hmac = ? AND rebind_count = ?
+         AND (? = 0 OR rebind_count < 2)`,
     ).bind(
       operation.target_email_hmac,
       operation.target_email_ciphertext,
       operation.new_tester_id,
       operation.target_group_id,
+      operation.counts_as_rebind,
       now,
       operation.binding_id,
       env.APP_KEY,
       operation.from_email_hmac,
       operation.expected_rebind_count,
+      operation.counts_as_rebind,
     ),
     env.DB.prepare(
       `UPDATE tf_web_rebind_operations SET stage = 'completed', terminal_state = 'completed',
@@ -869,7 +876,7 @@ export async function completeWebRebind(
       operation.binding_id,
       env.APP_KEY,
       operation.target_email_hmac,
-      operation.expected_rebind_count + 1,
+      operation.expected_rebind_count + operation.counts_as_rebind,
     ),
   ]);
   if (bindingResult?.meta.changes === 1) return true;
@@ -878,7 +885,8 @@ export async function completeWebRebind(
     operation.app_transaction_id_hmac,
   );
   return current?.email_hmac === operation.target_email_hmac &&
-    current.rebind_count === operation.expected_rebind_count + 1;
+    current.rebind_count ===
+      operation.expected_rebind_count + operation.counts_as_rebind;
 }
 
 export async function findRecoverableWebRebindOperations(
@@ -891,7 +899,7 @@ export async function findRecoverableWebRebindOperations(
       expected_rebind_count, stage, asc_stage, attempt_count, next_attempt_at,
       target_group_id, terminal_state, compensation_stage, error_kind,
       last_error, last_http_status, last_asc_code, max_attempts,
-      compensation_attempt_count, max_compensation_attempts
+      compensation_attempt_count, max_compensation_attempts, counts_as_rebind
      FROM tf_web_rebind_operations
      WHERE app_key = ? AND terminal_state = 'active'
        AND (

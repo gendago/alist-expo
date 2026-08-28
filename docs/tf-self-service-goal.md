@@ -164,9 +164,9 @@ AList 专用资源：
 类型检查、61 项测试、资源隔离检查、启动分析和 dry-run 均通过。部署后确认健康检查、申请页、
 preview 错误边界与 D1 状态正常，旧飞书路径返回 404，`miraplay.99999987.xyz/health` 保持正常。
 
-2026-08-28 已顺序应用 `0009_tf_access_reliability.sql` 与
-`0010_reconcile_purchased_group.sql`，并部署 Worker 版本
-`2c22daf8-b2f7-4be2-b911-a3b7e3e70c62`。部署前类型检查、10 个测试文件/77 项测试、生产资源
+2026-08-28 已顺序应用 `0009_tf_access_reliability.sql`、
+`0010_reconcile_purchased_group.sql` 与 `0011_pending_email_retry.sql`，并部署 Worker 版本
+`a2a99ef4-a24e-41bd-978c-b9c8c0c28eb5`。部署前类型检查、10 个测试文件/78 项测试、生产资源
 隔离检查、启动分析和显式 `wrangler deploy --dry-run` 全部通过。生产 3 条历史 binding 保持不变；
 其中 2 条已收敛为 active 且分组快照统一到“已购用户”，另 1 条跨 App tester 被 ASC 明确以
 `409 STATE_ERROR` 拒绝并进入脱敏终态，不会无限重试或影响其他 App。

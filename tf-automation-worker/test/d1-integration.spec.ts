@@ -38,6 +38,7 @@ const MIGRATIONS = [
   "0008_web_rebind_limit.sql",
   "0009_tf_access_reliability.sql",
   "0010_reconcile_purchased_group.sql",
+  "0011_pending_email_retry.sql",
 ];
 
 async function applyMigrations(
@@ -149,7 +150,7 @@ describe("真实 workerd D1 迁移与并发语义", () => {
     }
   });
 
-  it("按 0001 到 0010 升级并保留历史 migration、换绑次数和恢复状态", async () => {
+  it("按 0001 到 0011 升级并保留历史 migration、换绑次数和恢复状态", async () => {
     const columns = await database.prepare(
       "PRAGMA table_info(tf_feishu_rebind_jobs)",
     ).all<{ name: string }>();
@@ -437,6 +438,49 @@ describe("真实 workerd D1 迁移与并发语义", () => {
       rebind_count: 1,
     });
     expect(await findActiveWebRebindOperation(testEnv, "transaction-a")).toBeNull();
+  });
+
+  it("首次绑定未成功时改用新邮箱不消耗正式换绑次数", async () => {
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "new-group",
+    });
+    const now = Date.now();
+    const binding = await createBinding(
+      testEnv,
+      "pending-email-retry-transaction",
+      "failed-first-email",
+      "failed-first-cipher",
+      now,
+    );
+    const operation = await createWebRebindOperation(
+      testEnv,
+      binding,
+      "retry-email",
+      "retry-cipher",
+      now,
+    );
+    expect(operation?.counts_as_rebind).toBe(0);
+    await updateWebRebindStage(testEnv, operation!.id, "new_invited", {
+      newTesterId: "retry-tester",
+      ascStage: "invited",
+    });
+    expect(await completeWebRebind(
+      testEnv,
+      (await findActiveWebRebindOperation(
+        testEnv,
+        "pending-email-retry-transaction",
+      ))!,
+    )).toBe(true);
+    expect(await findBindingByTransaction(
+      testEnv,
+      "pending-email-retry-transaction",
+    )).toMatchObject({
+      email_hmac: "retry-email",
+      status: "active",
+      rebind_count: 0,
+    });
   });
 
   it("并发换绑同一凭证或同一目标邮箱时只保留一个活动任务", async () => {

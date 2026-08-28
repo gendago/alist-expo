@@ -142,7 +142,7 @@ vi.mock("../src/repository", () => ({
     state.binding.email_ciphertext = state.operation.target_email_ciphertext;
     state.binding.asc_tester_id = state.operation.new_tester_id;
     state.binding.status = "active";
-    state.binding.rebind_count += 1;
+    state.binding.rebind_count += state.operation.counts_as_rebind ?? 1;
     state.operation = null;
     return true;
   }),
@@ -171,6 +171,7 @@ vi.mock("../src/repository", () => ({
       max_attempts: 8,
       compensation_attempt_count: 0,
       max_compensation_attempts: 8,
+      counts_as_rebind: binding.status === "active" ? 1 : 0,
     };
     return state.operation;
   }),
@@ -528,6 +529,7 @@ describe("核心状态机", () => {
       max_attempts: 8,
       compensation_attempt_count: 0,
       max_compensation_attempts: 8,
+      counts_as_rebind: 1,
     };
 
     await recoverWebRebindWork(env());
