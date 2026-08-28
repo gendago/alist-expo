@@ -2,17 +2,55 @@ import { readFile } from "node:fs/promises";
 import { Miniflare } from "miniflare";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  compareAndSetAccessOperationStage,
+  compareAndSetWebRebindStage,
+  completeAccessOperation,
+  convertRepairToApplyRecovery,
+  completeWebRebindCompensation,
+  createAccessOperation,
   cancelWebRebindOperation,
   completeWebRebind,
   createBinding,
+  createClaim,
   createWebRebindOperation,
+  findActiveAccessOperation,
   findActiveWebRebindOperation,
   findBindingByTransaction,
+  findClaim,
+  recordAccessOperationFailure,
+  recordWebRebindCompensationFailure,
+  recordWebRebindFailure,
+  setClaimState,
   updateWebRebindStage,
 } from "../src/repository";
 
 let miniflare: Miniflare;
 let database: D1Database;
+
+const MIGRATIONS = [
+  "0001_alistserver_init.sql",
+  "0002_feishu_events.sql",
+  "0003_feishu_rebind_jobs.sql",
+  "0004_feishu_card_recovery.sql",
+  "0005_feishu_card_lease.sql",
+  "0006_feishu_direct_binding.sql",
+  "0007_feishu_intended_operation.sql",
+  "0008_web_rebind_limit.sql",
+  "0009_tf_access_reliability.sql",
+  "0010_reconcile_purchased_group.sql",
+];
+
+async function applyMigrations(
+  target: D1Database,
+  names: string[],
+): Promise<void> {
+  for (const name of names) {
+    const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
+    for (const statement of sql.split(";").map((value) => value.trim()).filter(Boolean)) {
+      await target.prepare(statement).run();
+    }
+  }
+}
 
 beforeEach(async () => {
   miniflare = new Miniflare({
@@ -22,21 +60,7 @@ beforeEach(async () => {
     d1Databases: { DB: "alist-tf-integration" },
   });
   database = await miniflare.getD1Database("DB");
-  for (const name of [
-    "0001_alistserver_init.sql",
-    "0002_feishu_events.sql",
-    "0003_feishu_rebind_jobs.sql",
-    "0004_feishu_card_recovery.sql",
-    "0005_feishu_card_lease.sql",
-    "0006_feishu_direct_binding.sql",
-    "0007_feishu_intended_operation.sql",
-    "0008_web_rebind_limit.sql",
-  ]) {
-    const sql = await readFile(new URL(`../migrations/${name}`, import.meta.url), "utf8");
-    for (const statement of sql.split(";").map((value) => value.trim()).filter(Boolean)) {
-      await database.prepare(statement).run();
-    }
-  }
+  await applyMigrations(database, MIGRATIONS);
 });
 
 afterEach(async () => {
@@ -44,7 +68,88 @@ afterEach(async () => {
 });
 
 describe("真实 workerd D1 迁移与并发语义", () => {
-  it("按 0001 到 0008 升级并保留历史 migration、换绑次数和恢复状态", async () => {
+  it("带历史数据从 0008 升级时补建 pending/分组迁移任务并避开活动换绑", async () => {
+    const upgrade = new Miniflare({
+      modules: true,
+      script: "export default { fetch() { return new Response('ok'); } };",
+      compatibilityDate: "2026-07-27",
+      d1Databases: { DB: "alist-tf-upgrade" },
+    });
+    try {
+      const upgradeDb = await upgrade.getD1Database("DB");
+      await applyMigrations(upgradeDb, MIGRATIONS.slice(0, 8));
+      const now = Date.now();
+      await upgradeDb.batch([
+        upgradeDb.prepare(
+          `INSERT INTO tf_bindings(
+            app_key,app_transaction_id_hmac,email_hmac,email_ciphertext,
+            status,asc_stage,created_at,updated_at
+          ) VALUES ('alist','pending-recover','email-a','cipher-a',
+            'pending_asc','tester_found',?,?)`,
+        ).bind(now, now),
+        upgradeDb.prepare(
+          `INSERT INTO tf_bindings(
+            app_key,app_transaction_id_hmac,email_hmac,email_ciphertext,
+            status,asc_stage,created_at,updated_at
+          ) VALUES ('alist','pending-rebind','email-b','cipher-b',
+            'pending_asc','tester_found',?,?)`,
+        ).bind(now, now),
+        upgradeDb.prepare(
+          `INSERT INTO tf_bindings(
+            app_key,app_transaction_id_hmac,email_hmac,email_ciphertext,
+            status,asc_stage,created_at,updated_at
+          ) VALUES ('alist','active-existing','email-c','cipher-c',
+            'active','invited',?,?)`,
+        ).bind(now, now),
+      ]);
+      const rebindBinding = await upgradeDb.prepare(
+        "SELECT id FROM tf_bindings WHERE app_transaction_id_hmac='pending-rebind'",
+      ).first<{ id: number }>();
+      await upgradeDb.prepare(
+        `INSERT INTO tf_web_rebind_operations(
+          id,app_key,binding_id,app_transaction_id_hmac,from_email_hmac,
+          target_email_hmac,target_email_ciphertext,expected_rebind_count,
+          stage,next_attempt_at,created_at,updated_at
+        ) VALUES ('legacy-rebind','alist',?,'pending-rebind','email-b',
+          'email-new','cipher-new',0,'prepared',?,?,?)`,
+      ).bind(rebindBinding!.id, now, now, now).run();
+
+      await applyMigrations(upgradeDb, MIGRATIONS.slice(8));
+
+      const operations = await upgradeDb.prepare(
+        `SELECT b.app_transaction_id_hmac, o.target_group_id
+         FROM tf_access_operations o
+         JOIN tf_bindings b ON b.id = o.binding_id
+         ORDER BY b.app_transaction_id_hmac`,
+      ).all<{ app_transaction_id_hmac: string; target_group_id: string }>();
+      expect(operations.results).toEqual([
+        {
+          app_transaction_id_hmac: "active-existing",
+          target_group_id: "16b2ab29-bbde-4291-a4b7-77ee42eefb70",
+        },
+        {
+          app_transaction_id_hmac: "pending-recover",
+          target_group_id: "16b2ab29-bbde-4291-a4b7-77ee42eefb70",
+        },
+      ]);
+      const upgradedRebind = await upgradeDb.prepare(
+        "SELECT target_group_id FROM tf_web_rebind_operations WHERE id='legacy-rebind'",
+      ).first<{ target_group_id: string }>();
+      expect(upgradedRebind?.target_group_id).toBe(
+        "16b2ab29-bbde-4291-a4b7-77ee42eefb70",
+      );
+      const groups = await upgradeDb.prepare(
+        "SELECT DISTINCT beta_group_id FROM tf_bindings",
+      ).all<{ beta_group_id: string }>();
+      expect(groups.results).toEqual([
+        { beta_group_id: "c7ca74ed-8a19-4c4b-9a81-ad3d4b235081" },
+      ]);
+    } finally {
+      await upgrade.dispose();
+    }
+  });
+
+  it("按 0001 到 0010 升级并保留历史 migration、换绑次数和恢复状态", async () => {
     const columns = await database.prepare(
       "PRAGMA table_info(tf_feishu_rebind_jobs)",
     ).all<{ name: string }>();
@@ -77,10 +182,17 @@ describe("真实 workerd D1 迁移与并发语义", () => {
     expect(bindingColumns.results.map((column) => column.name)).toContain(
       "rebind_count",
     );
+    expect(bindingColumns.results.map((column) => column.name)).toContain(
+      "beta_group_id",
+    );
     const operationTable = await database.prepare(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='tf_web_rebind_operations'",
     ).first<{ name: string }>();
     expect(operationTable?.name).toBe("tf_web_rebind_operations");
+    const accessOperationTable = await database.prepare(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='tf_access_operations'",
+    ).first<{ name: string }>();
+    expect(accessOperationTable?.name).toBe("tf_access_operations");
   });
 
   it("D1 batch 中途失败时原子回滚", async () => {
@@ -95,10 +207,193 @@ describe("真实 workerd D1 迁移与并发语义", () => {
     expect(row?.count).toBe(0);
   });
 
+  it("历史绑定回填旧分组，新绑定保存当前目标组快照", async () => {
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "current-purchased-group",
+    });
+    const now = Date.now();
+    await database.prepare(
+      `INSERT INTO tf_bindings(
+        app_key,app_transaction_id_hmac,email_hmac,email_ciphertext,
+        status,asc_stage,created_at,updated_at
+      ) VALUES ('alist','legacy-transaction','legacy-email','legacy-cipher',
+        'active','invited',?,?)`,
+    ).bind(now, now).run();
+    expect((await findBindingByTransaction(testEnv, "legacy-transaction"))?.beta_group_id)
+      .toBe("c7ca74ed-8a19-4c4b-9a81-ad3d4b235081");
+
+    const current = await createBinding(
+      testEnv,
+      "current-transaction",
+      "current-email",
+      "current-cipher",
+      now,
+    );
+    expect(current.beta_group_id).toBe("current-purchased-group");
+  });
+
+  it("申请与修复任务按 binding 唯一，并通过 CAS 和有限重试恢复", async () => {
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "purchased-group",
+    });
+    const now = Date.now();
+    const binding = await createBinding(
+      testEnv,
+      "access-transaction",
+      "access-email",
+      "access-cipher",
+      now,
+    );
+    const first = await createAccessOperation(
+      testEnv,
+      binding,
+      "apply",
+      "purchased-group",
+      now,
+    );
+    const duplicate = await createAccessOperation(
+      testEnv,
+      binding,
+      "repair",
+      "other-group",
+      now,
+    );
+    expect(first.id).toBe(duplicate.id);
+    expect(await findActiveAccessOperation(testEnv, binding.id)).toMatchObject({
+      target_group_id: "purchased-group",
+      stage: "prepared",
+      status: "active",
+    });
+    expect(await compareAndSetAccessOperationStage(
+      testEnv,
+      first.id,
+      "prepared",
+      "tester_resolving",
+    )).toBe(true);
+    expect(await compareAndSetAccessOperationStage(
+      testEnv,
+      first.id,
+      "prepared",
+      "tester_found",
+    )).toBe(false);
+
+    const failed = await recordAccessOperationFailure(testEnv, first.id, {
+      kind: "asc_http",
+      safeMessage: "ASC 请求失败",
+      httpStatus: 429,
+      ascCode: "RATE_LIMITED",
+      retryable: true,
+      nextAttemptAt: now + 60_000,
+    });
+    expect(failed).toMatchObject({
+      attempt_count: 1,
+      status: "active",
+      error_kind: "asc_http",
+      last_http_status: 429,
+      last_asc_code: "RATE_LIMITED",
+    });
+    expect(await compareAndSetAccessOperationStage(
+      testEnv,
+      first.id,
+      "tester_resolving",
+      "tester_found",
+      { testerId: "resolved-tester" },
+    )).toBe(true);
+    expect(await compareAndSetAccessOperationStage(
+      testEnv,
+      first.id,
+      "tester_found",
+      "group_visible",
+    )).toBe(true);
+    expect(await completeAccessOperation(
+      testEnv,
+      first.id,
+      binding.id,
+      "resolved-tester",
+      "purchased-group",
+    )).toBe(true);
+    expect(await findActiveAccessOperation(testEnv, binding.id)).toBeNull();
+    expect(await findBindingByTransaction(testEnv, "access-transaction")).toMatchObject({
+      status: "active",
+      asc_tester_id: "resolved-tester",
+      beta_group_id: "purchased-group",
+    });
+  });
+
+  it("破坏性 repair 终态会原子转换为 apply 恢复，不留下崩溃窗口", async () => {
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "purchased-group",
+    });
+    const now = Date.now();
+    const binding = await createBinding(
+      testEnv,
+      "repair-conversion-transaction",
+      "repair-conversion-email",
+      "repair-conversion-cipher",
+      now,
+    );
+    const operation = await createAccessOperation(
+      testEnv,
+      binding,
+      "repair",
+      "purchased-group",
+      now,
+    );
+    await compareAndSetAccessOperationStage(
+      testEnv,
+      operation.id,
+      "prepared",
+      "app_removing",
+    );
+    expect(await convertRepairToApplyRecovery(testEnv, operation.id, {
+      kind: "asc_rejected",
+      safeMessage: "asc_rejected",
+      httpStatus: 422,
+      ascCode: "INVALID_RELATIONSHIP",
+      nextAttemptAt: now + 60_000,
+    })).toBe(true);
+    expect(await findActiveAccessOperation(testEnv, binding.id)).toMatchObject({
+      operation_type: "apply",
+      stage: "tester_adding",
+      status: "active",
+      attempt_count: 0,
+      error_kind: "asc_rejected",
+      last_http_status: 422,
+      last_asc_code: "INVALID_RELATIONSHIP",
+    });
+  });
+
+  it("claim 配额原子限制为三份，并绑定创建 IP 且 completed 不会回退", async () => {
+    const testEnv = Object.assign({} as Env, { DB: database, APP_KEY: "alist" });
+    const now = Date.now();
+    const results = await Promise.allSettled(
+      ["claim-a", "claim-b", "claim-c", "claim-d"].map((claim) =>
+        createClaim(testEnv, claim, "same-transaction", "source-ip", now)
+      ),
+    );
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(3);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect((await findClaim(testEnv, "claim-a"))?.created_ip_hmac).toBe("source-ip");
+
+    await database.prepare(
+      "UPDATE tf_claim_sessions SET state='applying' WHERE id_hmac='claim-a'",
+    ).run();
+    expect(await setClaimState(testEnv, "claim-a", "completed", now + 1)).toBe(true);
+    expect(await setClaimState(testEnv, "claim-a", "failed_retryable", now + 2)).toBe(false);
+    expect((await findClaim(testEnv, "claim-a"))?.state).toBe("completed");
+  });
+
   it("网页换绑预留目标邮箱，成功后才原子扣减一次机会", async () => {
     const testEnv = Object.assign({} as Env, {
       DB: database,
       APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "new-group",
     });
     const now = Date.now();
     await database.prepare(
@@ -148,6 +443,7 @@ describe("真实 workerd D1 迁移与并发语义", () => {
     const testEnv = Object.assign({} as Env, {
       DB: database,
       APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "new-group",
     });
     const now = Date.now();
     await database.batch([
@@ -193,8 +489,136 @@ describe("真实 workerd D1 迁移与并发语义", () => {
     expect(activeCount?.count).toBe(1);
   });
 
+  it("换绑阶段使用 CAS，破坏性阶段永久失败时转为恢复旧邮箱", async () => {
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "new-group",
+    });
+    const now = Date.now();
+    const binding = await createBinding(
+      testEnv,
+      "compensate-transaction",
+      "compensate-old-email",
+      "compensate-old-cipher",
+      now,
+    );
+    const operation = await createWebRebindOperation(
+      testEnv,
+      binding,
+      "compensate-new-email",
+      "compensate-new-cipher",
+      now,
+    );
+    expect(await compareAndSetWebRebindStage(
+      testEnv,
+      operation!.id,
+      "prepared",
+      "old_removing",
+    )).toBe(true);
+    expect(await compareAndSetWebRebindStage(
+      testEnv,
+      operation!.id,
+      "prepared",
+      "old_removed",
+    )).toBe(false);
+
+    const failed = await recordWebRebindFailure(testEnv, operation!.id, {
+      kind: "asc_rejected",
+      safeMessage: "ASC 永久拒绝",
+      httpStatus: 422,
+      ascCode: "INVALID_RELATIONSHIP",
+      retryable: false,
+      nextAttemptAt: now + 60_000,
+    });
+    expect(failed).toMatchObject({
+      terminal_state: "active",
+      compensation_stage: "old_restoring",
+      attempt_count: 1,
+      last_http_status: 422,
+      last_asc_code: "INVALID_RELATIONSHIP",
+    });
+    expect(await completeWebRebindCompensation(testEnv, operation!.id)).toBe(true);
+    const cancelled = await database.prepare(
+      `SELECT terminal_state,compensation_stage,target_email_ciphertext
+       FROM tf_web_rebind_operations WHERE id = ?`,
+    ).bind(operation!.id).first<{
+      terminal_state: string;
+      compensation_stage: string;
+      target_email_ciphertext: string;
+    }>();
+    expect(cancelled).toEqual({
+      terminal_state: "cancelled",
+      compensation_stage: "old_restored",
+      target_email_ciphertext: "",
+    });
+  });
+
+  it("旧邮箱补偿连续失败达到上限后进入终态并清除目标密文", async () => {
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "new-group",
+    });
+    const now = Date.now();
+    const binding = await createBinding(
+      testEnv,
+      "compensation-limit-transaction",
+      "compensation-limit-old",
+      "old-cipher",
+      now,
+    );
+    const operation = await createWebRebindOperation(
+      testEnv,
+      binding,
+      "compensation-limit-new",
+      "new-cipher",
+      now,
+    );
+    await compareAndSetWebRebindStage(
+      testEnv,
+      operation!.id,
+      "prepared",
+      "old_removing",
+    );
+    await recordWebRebindFailure(testEnv, operation!.id, {
+      kind: "asc_rejected",
+      safeMessage: "asc_rejected",
+      retryable: false,
+      nextAttemptAt: now,
+    });
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await recordWebRebindCompensationFailure(testEnv, operation!.id, {
+        kind: "asc_unavailable",
+        safeMessage: "asc_unavailable",
+        retryable: true,
+        nextAttemptAt: now,
+      });
+    }
+    const terminal = await database.prepare(
+      `SELECT terminal_state, compensation_stage, compensation_attempt_count,
+        target_email_ciphertext
+       FROM tf_web_rebind_operations WHERE id = ?`,
+    ).bind(operation!.id).first<{
+      terminal_state: string;
+      compensation_stage: string;
+      compensation_attempt_count: number;
+      target_email_ciphertext: string;
+    }>();
+    expect(terminal).toEqual({
+      terminal_state: "failed_terminal",
+      compensation_stage: "failed_terminal",
+      compensation_attempt_count: 8,
+      target_email_ciphertext: "",
+    });
+  });
+
   it("取消换绑任务时立即清除目标邮箱密文", async () => {
-    const testEnv = Object.assign({} as Env, { DB: database, APP_KEY: "alist" });
+    const testEnv = Object.assign({} as Env, {
+      DB: database,
+      APP_KEY: "alist",
+      ASC_BETA_GROUP_ID: "new-group",
+    });
     const now = Date.now();
     await database.prepare(
       `INSERT INTO tf_bindings(

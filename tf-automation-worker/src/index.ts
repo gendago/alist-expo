@@ -38,6 +38,7 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/tf/session") {
         await enforcePublicLimits(env, "session", ipHmac, 8, 60_000);
         const body = await readJson<Record<string, unknown>>(request, 2048);
+        await verifyTurnstile(env, body.turnstileToken, ip);
         const appTransactionId = normalizeAppTransactionId(body.appTransactionId);
         const result = await createSession(env, appTransactionId, ipHmac);
         recordAttempt(ctx, env, requestId, "session", "created", ipHmac);
@@ -46,7 +47,6 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/tf/apply") {
         await enforcePublicLimits(env, "apply", ipHmac, 10, 60_000);
         const body = await readJson<Record<string, unknown>>(request, 8192);
-        await verifyTurnstile(env, body.turnstileToken, ip);
         if (typeof body.claimToken !== "string") {
           throw new AppError("invalid_request", "invalid claim");
         }
@@ -55,6 +55,8 @@ export default {
           body.claimToken,
           body.email,
           body.confirmRebind === true,
+          body.confirmRepair === true,
+          ipHmac,
         );
         recordAttempt(ctx, env, requestId, "apply", result.status, ipHmac);
         return json(result);
@@ -65,7 +67,7 @@ export default {
         if (typeof body.claimToken !== "string") {
           throw new AppError("invalid_request", "invalid claim");
         }
-        const result = await previewClaim(env, body.claimToken, body.email);
+        const result = await previewClaim(env, body.claimToken, body.email, ipHmac);
         recordAttempt(ctx, env, requestId, "preview", result.operation, ipHmac);
         return json(result);
       }
@@ -104,7 +106,7 @@ export default {
             env,
             crypto.randomUUID(),
             "cloudflare_cron",
-            "web_rebind_recovery",
+            "tf_access_recovery",
             recovery.failed > 0 ? "retryable" : "completed",
             null,
             recovery,
@@ -188,6 +190,7 @@ async function runRetention(
   audits: number;
   cooldowns: number;
   operationLeases: number;
+  accessOperations: number;
   webRebindOperations: number;
 }> {
   const now = Date.now();
@@ -210,10 +213,17 @@ async function runRetention(
        )`,
     ).bind(now - 86_400_000),
     env.DB.prepare(
+      `DELETE FROM tf_access_operations
+       WHERE id IN (
+         SELECT id FROM tf_access_operations
+         WHERE status != 'active' AND updated_at < ? LIMIT 500
+       )`,
+    ).bind(now - 400 * 86_400_000),
+    env.DB.prepare(
       `DELETE FROM tf_web_rebind_operations
        WHERE id IN (
          SELECT id FROM tf_web_rebind_operations
-         WHERE stage IN ('completed', 'cancelled') AND updated_at < ? LIMIT 500
+         WHERE terminal_state != 'active' AND updated_at < ? LIMIT 500
        )`,
     ).bind(now - 400 * 86_400_000),
   ];
@@ -223,6 +233,7 @@ async function runRetention(
     audits,
     cooldowns,
     operationLeases,
+    accessOperations,
     webRebindOperations,
   ] = await env.DB.batch(statements);
   return {
@@ -231,6 +242,7 @@ async function runRetention(
     audits: audits?.meta.changes ?? 0,
     cooldowns: cooldowns?.meta.changes ?? 0,
     operationLeases: operationLeases?.meta.changes ?? 0,
+    accessOperations: accessOperations?.meta.changes ?? 0,
     webRebindOperations: webRebindOperations?.meta.changes ?? 0,
   };
 }

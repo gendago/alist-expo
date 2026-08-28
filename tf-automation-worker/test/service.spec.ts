@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   ensureError: null as Error | null,
   ensureAfterFinalError: null as Error | null,
   createBindingError: null as Error | null,
+  accessOperation: null as any,
   operation: null as any,
   binding: null as null | {
     id: number;
@@ -21,6 +22,7 @@ const state = vi.hoisted(() => ({
     asc_stage: string;
     asc_removal_state: string;
     rebind_count: number;
+    beta_group_id: string;
   },
   emailBinding: null as null | {
     id: number;
@@ -32,6 +34,7 @@ const state = vi.hoisted(() => ({
     asc_stage: string;
     asc_removal_state: string;
     rebind_count: number;
+    beta_group_id: string;
   },
   claim: {
     id_hmac: "claim-hmac",
@@ -39,6 +42,7 @@ const state = vi.hoisted(() => ({
     state: "issued",
     email_hmac: null as string | null,
     expires_at: Date.now() + 60_000,
+    created_ip_hmac: "ip-hmac",
   },
   removeCalls: 0,
 }));
@@ -60,6 +64,11 @@ vi.mock("../src/repository", () => ({
     state.acquired = false;
     return true;
   }),
+  acquireAccessOperationLease: vi.fn(async () => true),
+  acquireWebRebindOperationLease: vi.fn(async () => true),
+  cancelAccessOperation: vi.fn(async () => {
+    state.accessOperation = null;
+  }),
   acquireLease: vi.fn(async () => {
     if (state.leaseHeld) return false;
     state.leaseHeld = true;
@@ -80,10 +89,53 @@ vi.mock("../src/repository", () => ({
       asc_stage: "binding_created",
       asc_removal_state: "not_requested",
       rebind_count: 0,
+      beta_group_id: "group",
     };
     return state.binding;
   }),
   createClaim: vi.fn(async () => undefined),
+  createAccessOperation: vi.fn(async (_env, binding, operationType, targetGroupId) => {
+    state.accessOperation ??= {
+      id: "access-operation-1",
+      binding_id: binding.id,
+      app_transaction_id_hmac: binding.app_transaction_id_hmac,
+      operation_type: operationType,
+      target_group_id: targetGroupId,
+      tester_id: binding.asc_tester_id,
+      stage: "prepared",
+      status: "active",
+      attempt_count: 0,
+      max_attempts: 8,
+      next_attempt_at: Date.now(),
+      error_kind: null,
+      last_error: null,
+      last_http_status: null,
+      last_asc_code: null,
+    };
+    return state.accessOperation;
+  }),
+  compareAndSetAccessOperationStage: vi.fn(async (_env, _id, expected, next, options = {}) => {
+    if (!state.accessOperation || state.accessOperation.stage !== expected) return false;
+    state.accessOperation.stage = next;
+    if (options.testerId) state.accessOperation.tester_id = options.testerId;
+    return true;
+  }),
+  completeAccessOperation: vi.fn(async (_env, _id, _bindingId, testerId, groupId) => {
+    if (!state.binding || !state.accessOperation) return false;
+    state.binding.asc_tester_id = testerId;
+    state.binding.beta_group_id = groupId;
+    state.binding.status = "active";
+    state.binding.asc_stage = "invited";
+    state.accessOperation = null;
+    return true;
+  }),
+  convertRepairToApplyRecovery: vi.fn(async () => {
+    if (!state.accessOperation) return false;
+    state.accessOperation.operation_type = "apply";
+    state.accessOperation.stage = "tester_adding";
+    state.accessOperation.attempt_count = 0;
+    return true;
+  }),
   completeWebRebind: vi.fn(async () => {
     if (!state.binding || !state.operation?.new_tester_id) return false;
     state.binding.email_hmac = state.operation.target_email_hmac;
@@ -109,19 +161,50 @@ vi.mock("../src/repository", () => ({
       asc_stage: "none",
       attempt_count: 0,
       next_attempt_at: Date.now(),
+      target_group_id: "group",
+      terminal_state: "active",
+      compensation_stage: "none",
+      error_kind: null,
+      last_error: null,
+      last_http_status: null,
+      last_asc_code: null,
+      max_attempts: 8,
+      compensation_attempt_count: 0,
+      max_compensation_attempts: 8,
     };
     return state.operation;
   }),
   findActiveWebRebindOperation: vi.fn(async () => state.operation),
+  findActiveAccessOperation: vi.fn(async () => state.accessOperation),
   findBindingByEmail: vi.fn(async () => state.emailBinding),
   findBindingByTransaction: vi.fn(async () => state.binding),
+  findBindingsNeedingAccessRecovery: vi.fn(async () => []),
   findClaim: vi.fn(async () => state.claim),
-  findRecoverableWebRebindOperations: vi.fn(async () => []),
+  findRecoverableWebRebindOperations: vi.fn(async () =>
+    state.operation ? [state.operation] : []
+  ),
+  findRecoverableAccessOperations: vi.fn(async () => []),
   markBindingRevoked: vi.fn(async () => {
     if (state.binding) state.binding.status = "revoked";
   }),
   releaseLease: vi.fn(async () => {
     state.leaseHeld = false;
+  }),
+  releaseAccessOperationLease: vi.fn(async () => undefined),
+  releaseWebRebindOperationLease: vi.fn(async () => undefined),
+  recordAccessOperationFailure: vi.fn(async () => state.accessOperation),
+  recordWebRebindFailure: vi.fn(async () => state.operation),
+  recordWebRebindCompensationFailure: vi.fn(async () => undefined),
+  completeWebRebindCompensation: vi.fn(async () => {
+    state.operation = null;
+    return true;
+  }),
+  compareAndSetWebRebindStage: vi.fn(async (_env, _id, expected, next, options = {}) => {
+    if (!state.operation || state.operation.stage !== expected) return false;
+    state.operation.stage = next;
+    if (options.newTesterId) state.operation.new_tester_id = options.newTesterId;
+    if (options.ascStage) state.operation.asc_stage = options.ascStage;
+    return true;
   }),
   renewLease: vi.fn(async () => state.leaseHeld),
   setClaimState: vi.fn(async (_env, _claim, next) => {
@@ -130,11 +213,12 @@ vi.mock("../src/repository", () => ({
   setRemovalState: vi.fn(async (_env, _id, next) => {
     if (state.binding) state.binding.asc_removal_state = next;
   }),
-  updateBindingAsc: vi.fn(async (_env, _id, testerId, stage, active) => {
+  updateBindingAsc: vi.fn(async (_env, _id, testerId, stage, active, groupId) => {
     if (state.binding) {
       state.binding.asc_tester_id = testerId;
       state.binding.asc_stage = stage;
       if (active) state.binding.status = "active";
+      if (groupId) state.binding.beta_group_id = groupId;
     }
   }),
   updateWebRebindStage: vi.fn(async (_env, _id, stage, options = {}) => {
@@ -147,11 +231,34 @@ vi.mock("../src/repository", () => ({
 }));
 
 vi.mock("../src/app-store-connect", () => ({
+  AscErrorCause: class extends Error {},
   AppStoreConnectClient: class {
     static async create() {
       return new this();
     }
     async preflightTester() {}
+    async findTester(email: string) {
+      return {
+        id: email === "new@example.com" ? "tester-2" : "tester-1",
+        email,
+        state: "INVITED",
+        appIds: ["123"],
+        groupIds: ["group"],
+      };
+    }
+    async getTester(testerId: string) {
+      return {
+        id: testerId,
+        email: "old@example.com",
+        state: "INVITED",
+        appIds: ["123"],
+        groupIds: ["group"],
+      };
+    }
+    async testerHasGroup() { return false; }
+    async waitForTesterGroupState() { return true; }
+    async waitForTesterAppState() { return true; }
+    async removeTesterFromGroup() {}
     async ensureTester(
       email: string,
       _app: string,
@@ -187,10 +294,32 @@ vi.mock("../src/app-store-connect", () => ({
 }));
 
 import {
-  applyClaim,
-  previewClaim,
+  applyClaim as applyClaimService,
+  previewClaim as previewClaimService,
+  recoverWebRebindWork,
   reportRevocation,
 } from "../src/service";
+
+function applyClaim(
+  testEnv: Env,
+  token: string,
+  email: string,
+  confirmRebind = false,
+  confirmRepair = false,
+) {
+  return applyClaimService(
+    testEnv,
+    token,
+    email,
+    confirmRebind,
+    confirmRepair,
+    "ip-hmac",
+  );
+}
+
+function previewClaim(testEnv: Env, token: string, email: string) {
+  return previewClaimService(testEnv, token, email, "ip-hmac");
+}
 
 function env(): Env {
   return Object.assign({} as Env, {
@@ -215,6 +344,7 @@ beforeEach(() => {
   state.ensureAfterFinalError = null;
   state.createBindingError = null;
   state.operation = null;
+  state.accessOperation = null;
   state.binding = null;
   state.emailBinding = null;
   state.claim = {
@@ -223,11 +353,65 @@ beforeEach(() => {
     state: "issued",
     email_hmac: null,
     expires_at: Date.now() + 60_000,
+    created_ip_hmac: "ip-hmac",
   };
   state.removeCalls = 0;
 });
 
 describe("核心状态机", () => {
+  it("普通同邮箱申请只做幂等对账，显式修复才执行 App 级移除且不扣换绑次数", async () => {
+    await expect(
+      applyClaim(env(), "a".repeat(32), "old@example.com"),
+    ).resolves.toMatchObject({ status: "invited", remainingRebinds: 2 });
+    expect(state.removeCalls).toBe(0);
+
+    state.acquired = true;
+    state.claim = {
+      ...state.claim,
+      state: "issued",
+      email_hmac: null,
+      expires_at: Date.now() + 60_000,
+    };
+    await expect(
+      applyClaim(env(), "b".repeat(32), "old@example.com"),
+    ).resolves.toMatchObject({ remainingRebinds: 2 });
+    expect(state.removeCalls).toBe(0);
+
+    state.acquired = true;
+    state.claim = {
+      ...state.claim,
+      state: "issued",
+      email_hmac: null,
+      expires_at: Date.now() + 60_000,
+    };
+    await expect(
+      applyClaim(env(), "c".repeat(32), "old@example.com", false, true),
+    ).resolves.toMatchObject({ status: "repaired", remainingRebinds: 2 });
+    expect(state.removeCalls).toBe(1);
+    expect(state.binding?.rebind_count).toBe(0);
+  });
+
+  it("claim 只能由创建 session 的同一来源继续使用", async () => {
+    await expect(
+      applyClaimService(
+        env(),
+        "c".repeat(32),
+        "user@example.com",
+        false,
+        false,
+        "another-ip-hmac",
+      ),
+    ).rejects.toMatchObject({ code: "invalid_request", status: 403 });
+    await expect(
+      previewClaimService(
+        env(),
+        "c".repeat(32),
+        "user@example.com",
+        "another-ip-hmac",
+      ),
+    ).rejects.toMatchObject({ code: "invalid_request", status: 403 });
+  });
+
   it("同一 claim 并发只有一个执行者", async () => {
     const results = await Promise.allSettled([
       applyClaim(env(), "c".repeat(32), "user@example.com"),
@@ -315,6 +499,46 @@ describe("核心状态机", () => {
     ).resolves.toMatchObject({ status: "rebound", remainingRebinds: 1 });
     expect(state.binding?.rebind_count).toBe(1);
     expect(state.operation).toBeNull();
+  });
+
+  it("换绑终态补偿会先清理目标 tester，再恢复旧邮箱且不扣次数", async () => {
+    await applyClaim(env(), "c".repeat(32), "old@example.com");
+    const binding = state.binding!;
+    state.operation = {
+      id: "operation-1",
+      binding_id: binding.id,
+      app_transaction_id_hmac: binding.app_transaction_id_hmac,
+      from_email_hmac: binding.email_hmac,
+      target_email_hmac: "new-email-hmac",
+      target_email_ciphertext: "target-cipher",
+      old_tester_id: "tester-1",
+      new_tester_id: "tester-2",
+      expected_rebind_count: 0,
+      stage: "new_adding",
+      asc_stage: "invited",
+      attempt_count: 8,
+      next_attempt_at: Date.now(),
+      target_group_id: "group",
+      terminal_state: "active",
+      compensation_stage: "old_restoring",
+      error_kind: "temporarily_unavailable",
+      last_error: "temporarily_unavailable",
+      last_http_status: 503,
+      last_asc_code: null,
+      max_attempts: 8,
+      compensation_attempt_count: 0,
+      max_compensation_attempts: 8,
+    };
+
+    await recoverWebRebindWork(env());
+
+    expect(state.removeCalls).toBe(1);
+    expect(state.operation).toBeNull();
+    expect(state.binding).toMatchObject({
+      asc_tester_id: "tester-1",
+      status: "active",
+      rebind_count: 0,
+    });
   });
 
   it("未确认换绑时不获取 claim、不移除旧资格也不扣次数", async () => {
@@ -423,6 +647,7 @@ describe("核心状态机", () => {
       status: "revoked",
       asc_removal_state: "completed",
       rebind_count: 0,
+      beta_group_id: "group",
     });
     expect(state.operation).toBeNull();
     expect(state.removeCalls).toBe(3);
@@ -439,6 +664,7 @@ describe("核心状态机", () => {
       asc_stage: "invited",
       asc_removal_state: "not_requested",
       rebind_count: 0,
+      beta_group_id: "group",
     };
     await expect(
       applyClaim(env(), "c".repeat(32), "user@example.com"),
@@ -456,6 +682,7 @@ describe("核心状态机", () => {
       asc_stage: "invited",
       asc_removal_state: "not_requested",
       rebind_count: 0,
+      beta_group_id: "group",
     };
     await expect(reportRevocation(env(), "j".repeat(256))).resolves.toEqual({
       status: "completed",

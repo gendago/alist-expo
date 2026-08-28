@@ -12,8 +12,11 @@ Secrets Store 条目的代码路径。
 1. 商店版 App 在 iOS 16+/tvOS 16+ 读取 verified `AppTransaction.shared.appTransactionID`。
 2. App 仅打开 `https://alistserver.99999987.xyz/tf#tid=<凭证ID>`。凭证在 URL fragment 中，
    不进入 HTTP 请求或访问日志；网页同步读取后立即清除地址栏，并显示“已自动填入凭证ID”。
-3. Worker 向 Apple 查询并验签下载付费凭证，签发 5 分钟、一次性的 claim。
-4. 用户输入 TestFlight 邮箱；网页先预览绑定状态。首次绑定直接申请，同一邮箱幂等修复。
+3. 网页先完成 Turnstile，Worker 才向 Apple 查询并验签下载付费凭证，随后签发 5 分钟、
+   一次性的 claim。
+4. 用户输入 TestFlight 邮箱；网页先预览绑定状态。首次绑定直接申请，同一邮箱普通申请只做
+   非破坏性的幂等对账；“修复 TestFlight 已被移除”是独立操作，会先移除本 App 权限、确认
+   关系消失，再重新加入“已购用户”分组，且不消耗换绑次数。
 5. 若凭证已绑定其他邮箱，网页明确提示旧邮箱将失去本 App 的测试权限，并显示当前还剩几次
    换绑机会。用户确认后才执行；换绑成功后只提示成功，不再显示剩余次数。
 
@@ -24,15 +27,18 @@ Secrets Store 条目的代码路径。
 ## 接口与恢复
 
 - `GET /tf`：申请页面。
-- `POST /api/tf/session`：服务端验证 `appTransactionId`，返回短期 claim。
+- `POST /api/tf/session`：先验证 Turnstile，再验证 `appTransactionId` 并返回短期 claim。
 - `POST /api/tf/preview`：只读预览首次绑定、同邮箱或换绑，以及剩余次数；不消费 Turnstile。
-- `POST /api/tf/apply`：验证 Turnstile，并且只执行一次首次绑定或已确认的换绑。
-- 5 分钟 Cron：恢复跨 D1/ASC 的未完成换绑任务。
+- `POST /api/tf/apply`：使用同一来源的短期 claim，只执行一次首次绑定、显式修复或已确认的换绑。
+- 5 分钟 Cron：有界恢复跨 D1/ASC 的首次申请、显式修复和换绑任务。
 - 每日 Cron：分批清理过期 claim、限流记录、租约、审计和已完成的旧换绑任务。
 
-换绑使用持久化 saga：先加密保存目标邮箱和旧 tester 快照，再移除旧资格、确保新 tester、邀请
+首次申请和显式修复使用 `tf_access_operations` 持久化阶段；显式修复严格执行 App 级移除、
+等待关系消失、重新加组和按 ASC 实际状态决定是否邀请。换绑使用持久化 saga：先加密保存目标
+邮箱和旧 tester 快照，再移除旧资格、确保新 tester、邀请
 到 AList 分组，最后用条件更新把绑定切换到新邮箱并将 `rebind_count` 加一。Worker 中断或 ASC
-暂时失败时，原任务会从最近阶段继续；不会因中间失败提前扣次数。数据库仅保存购买凭证 HMAC、
+暂时失败时，原任务会从最近阶段继续；永久错误或重试耗尽后会先恢复旧邮箱资格，且不会因中间
+失败提前扣次数。数据库仅保存购买凭证 HMAC、
 邮箱 HMAC/独立 AES-GCM 密文和脱敏审计，不保存凭证明文或 Apple JWS。
 
 退款撤权接口当前未开放。Apple 的公开下载付费 `AppTransaction` 模型没有可验证的退款字段，
@@ -47,7 +53,7 @@ Secrets Store 条目的代码路径。
 npm run typecheck
 npm test
 npm run check:startup
-npm exec wrangler deploy --dry-run
+npx wrangler deploy --dry-run
 npm run check:production-config
 ```
 

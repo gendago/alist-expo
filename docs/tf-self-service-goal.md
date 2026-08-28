@@ -49,17 +49,18 @@ Turnstile 第三方脚本。
 
 提交顺序：
 
-1. `/api/tf/session`：Worker 向 Apple 查询并验签凭证，返回 5 分钟 claim。
+1. `/api/tf/session`：先验证 Turnstile，再由 Worker 向 Apple 查询并验签凭证，返回 5 分钟 claim。
 2. `/api/tf/preview`：根据 claim 和目标邮箱只读返回：首次绑定、同邮箱幂等或换绑，以及当前
    剩余次数。这个接口不验证或消费 Turnstile token。
 3. 换绑时显示自定义确认框：明确目标邮箱、原邮箱将失去本 App 的 TestFlight 权限，以及当前
    还剩几次换绑机会。取消时不产生任何 ASC 副作用。
-4. `/api/tf/apply`：确认后只调用一次，服务端验证 Turnstile；换绑请求必须带
-   `confirmRebind: true`。
+4. `/api/tf/apply`：确认后只调用一次并消费短期 claim；换绑请求必须带
+   `confirmRebind: true`，显式修复必须带 `confirmRepair: true`。
 5. 成功页只提示申请或换绑成功，不显示剩余换绑次数。
 
 目标邮箱若已属于另一份购买凭证，拒绝本次操作并要求更换邮箱。达到两次成功换绑后，任何新邮箱
-换绑均拒绝；再次输入当前邮箱仍可幂等检查/修复资格。
+换绑均拒绝；再次输入当前邮箱可做非破坏性幂等对账。网页另设“修复 TestFlight 已被移除”
+按钮，用户确认后执行 App 级移除、等待关系消失并重新加入“已购用户”分组；修复不扣换绑次数。
 
 ## 4. Worker 与数据设计
 
@@ -67,6 +68,7 @@ Turnstile 第三方脚本。
 
 - `tf_claim_sessions`：短期 claim 状态机，只保存 token HMAC。
 - `tf_bindings`：凭证 HMAC、邮箱 HMAC/密文、ASC tester、状态和 `rebind_count`。
+- `tf_access_operations`：首次申请和显式修复的可恢复阶段、目标分组快照、有限重试及脱敏错误。
 - `tf_web_rebind_operations`：跨 D1/ASC 换绑 saga，保存目标邮箱密文、旧/新 tester 快照、预期
   计数、阶段、重试时间和脱敏错误。
 - `tf_operation_leases`：以购买凭证 HMAC 为资源的互斥租约。
@@ -80,7 +82,8 @@ prepared → old_removing → old_removed → new_adding → new_invited → com
 
 必须先持久化 operation，才允许调用 ASC 删除旧关系。新 tester 邀请完成后，D1 条件提交才把
 binding 切到新邮箱，并令 `rebind_count = expected + 1`。失败、中断、重复请求和响应丢失均不得
-重复扣次数。5 分钟 Cron 取得同一 binding 租约后从最近阶段恢复。
+重复扣次数。目标端出现永久错误或重试耗尽时，先自动恢复旧邮箱资格，再取消换绑。5 分钟 Cron
+取得同一 binding 租约后从最近阶段恢复首次申请、显式修复和换绑。
 
 并发约束：
 
@@ -99,7 +102,8 @@ binding 切到新邮箱，并令 `rebind_count = expected + 1`。失败、中断
 - 完整凭证只存在于客户端到 `/session` 的 POST body 和 Apple 必需查询路径；日志、D1、audit、
   URL query 均不得出现明文。
 - 邮箱只在 ASC 调用期间解密；D1 保存独立 AES-GCM 密文和 HMAC。
-- Turnstile 校验 hostname 和 action；token 只在最终 apply 消费一次。
+- Turnstile 校验 hostname 和 action；token 在调用昂贵的 Apple/OCSP 凭证验证前由 session
+  消费一次，后续 preview/apply 不重复消费。
 - HTML 使用 CSP nonce；动态内容通过 `textContent` 或转义输出。
 - 退款链路保持关闭，直到 Apple 提供可验证的下载付费撤销信号并重新设计。
 
@@ -124,7 +128,8 @@ AList 专用资源：
 
 - TypeScript typecheck、Worker 全量单测、真实 workerd/D1 migration 测试。
 - 从 `0001` 顺序应用到最新 migration；历史迁移不被修改。
-- preview 不消费 Turnstile；apply 只验证一次。
+- Turnstile 只在 session 验证一次；preview/apply 不重复消费。
+- 普通同邮箱申请不删除权限；显式修复执行 App 级移除、等待消失、重新加组，且不扣换绑次数。
 - 首次绑定剩余 2 次；两次成功换绑依次剩余 1、0；第三次拒绝。
 - ASC 删除后失败、创建 tester 后失败、邀请后响应丢失均可恢复，最终只扣一次。
 - 任何 ASC 副作用前失败或用户取消都不扣次数。
@@ -158,5 +163,12 @@ AList 专用资源：
 `alistserver-tf-automation` 版本 `4b3292fd-91a6-47d0-a046-af8bce67443e`。部署前 Worker
 类型检查、61 项测试、资源隔离检查、启动分析和 dry-run 均通过。部署后确认健康检查、申请页、
 preview 错误边界与 D1 状态正常，旧飞书路径返回 404，`miraplay.99999987.xyz/health` 保持正常。
+
+2026-08-28 已顺序应用 `0009_tf_access_reliability.sql` 与
+`0010_reconcile_purchased_group.sql`，并部署 Worker 版本
+`2c22daf8-b2f7-4be2-b911-a3b7e3e70c62`。部署前类型检查、10 个测试文件/77 项测试、生产资源
+隔离检查、启动分析和显式 `wrangler deploy --dry-run` 全部通过。生产 3 条历史 binding 保持不变；
+其中 2 条已收敛为 active 且分组快照统一到“已购用户”，另 1 条跨 App tester 被 ASC 明确以
+`409 STATE_ERROR` 拒绝并进入脱敏终态，不会无限重试或影响其他 App。
 
 本记录不代表真实购买样本验收已完成；Production 凭证和真实 TestFlight 邮箱仍按上一节由人工验收。

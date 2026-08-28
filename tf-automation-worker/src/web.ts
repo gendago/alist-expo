@@ -17,11 +17,12 @@ export function applicationPage(env: Env, nonce: string): string {
     input,button{width:100%;font:inherit}input{height:47px;margin:0 0 18px;padding:0 13px;border:1px solid #c8cbd2;border-radius:10px;background:#fff;color:#18191c}
     input:focus{outline:2px solid #1677ff;outline-offset:1px;border-color:transparent}
     button{min-height:48px;border:0;border-radius:10px;background:#1677ff;color:#fff;font-size:16px;font-weight:650;cursor:pointer}
+    .actions{display:grid;gap:10px}.actions .secondary{background:#e9ebef;color:#25282d}
     button:disabled{opacity:.55;cursor:wait}.credential-notice{display:none;margin:-7px 0 18px;padding:11px 13px;border-radius:10px;background:#edf5ff;color:#2462a3;font-size:14px}
     .turnstile{min-height:70px;margin:0 0 17px;overflow:hidden}.status{display:none;margin:18px 0 0;padding:12px 14px;border-radius:10px;background:#eef3fb;color:#24456f;line-height:1.55}
     .status.error{background:#fff0f0;color:#8d2424}
     [hidden]{display:none!important}.confirm-overlay{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:24px;background:#0008}.confirm-card{width:min(100%,420px);padding:22px;background:#fff;border-radius:16px;box-shadow:0 20px 60px #0004}.confirm-card h2{margin:0 0 12px;font-size:21px}.confirm-card p{margin:0;color:#555b64;line-height:1.65}.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:22px}.confirm-actions .secondary{background:#e9ebef;color:#25282d}
-    @media(prefers-color-scheme:dark){:root,body{background:#111214;color:#f4f4f5}form,.confirm-card{background:#1c1d20;border-color:#34363c;box-shadow:none}input{background:#111214;border-color:#494c54;color:#f4f4f5}.lead,.confirm-card p{color:#a7aab2}.credential-notice{background:#123154;color:#a8d0ff}.status{background:#1c2b3f;color:#bed9ff}.status.error{background:#3a1d20;color:#ffb7bd}.confirm-actions .secondary{background:#34363c;color:#f4f4f5}}
+    @media(prefers-color-scheme:dark){:root,body{background:#111214;color:#f4f4f5}form,.confirm-card{background:#1c1d20;border-color:#34363c;box-shadow:none}input{background:#111214;border-color:#494c54;color:#f4f4f5}.lead,.confirm-card p{color:#a7aab2}.credential-notice{background:#123154;color:#a8d0ff}.status{background:#1c2b3f;color:#bed9ff}.status.error{background:#3a1d20;color:#ffb7bd}.actions .secondary,.confirm-actions .secondary{background:#34363c;color:#f4f4f5}}
     @media(max-width:420px){main{width:min(100% - 20px,540px);padding-top:22px}form{padding:18px}h1{font-size:24px}}
   </style>
 </head>
@@ -36,7 +37,10 @@ export function applicationPage(env: Env, nonce: string): string {
       <input id="credential" name="credential" type="password" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="128" required>
       <p id="credential-notice" class="credential-notice" role="note">已自动填入凭证ID</p>
       <div class="turnstile"><div class="cf-turnstile" data-sitekey="${siteKey}" data-action="tf_apply" data-theme="auto" data-refresh-expired="auto"></div></div>
-      <button id="submit" type="submit">申请加入测试</button>
+      <div class="actions">
+        <button id="submit" type="submit">申请加入测试</button>
+        <button id="repair" class="secondary" type="submit">修复 TestFlight“已被移除”</button>
+      </div>
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </form>
   </main>
@@ -59,7 +63,9 @@ export function applicationPage(env: Env, nonce: string): string {
       const notice = document.getElementById("credential-notice");
       const status = document.getElementById("status");
       const submit = document.getElementById("submit");
+      const repair = document.getElementById("repair");
       const confirmOverlay = document.getElementById("confirm-overlay");
+      const confirmTitle = document.getElementById("confirm-title");
       const confirmMessage = document.getElementById("confirm-message");
       const confirmCancel = document.getElementById("confirm-cancel");
       const confirmSubmit = document.getElementById("confirm-submit");
@@ -85,10 +91,12 @@ export function applicationPage(env: Env, nonce: string): string {
         const appTransactionId = credential.value.trim();
         const requestedEmail = email.value.trim();
         const turnstileToken = form.querySelector('[name="cf-turnstile-response"]')?.value || "";
+        const isRepair = event.submitter === repair;
         if (!appTransactionId) return show("请输入凭证 ID。", true);
         if (!turnstileToken) return show("请先完成人机验证。", true);
 
         submit.disabled = true;
+        repair.disabled = true;
         show("正在验证购买凭证…", false);
         try {
           const sessionResponse = await fetch("/api/tf/session", {
@@ -96,7 +104,7 @@ export function applicationPage(env: Env, nonce: string): string {
             headers: {"content-type":"application/json"},
             cache: "no-store",
             credentials: "same-origin",
-            body: JSON.stringify({appTransactionId})
+            body: JSON.stringify({appTransactionId, turnstileToken})
           });
           const session = await sessionResponse.json();
           if (!sessionResponse.ok) throw new Error(session.message || "无法验证购买凭证。");
@@ -118,7 +126,19 @@ export function applicationPage(env: Env, nonce: string): string {
           const preview = await previewResponse.json();
           if (!previewResponse.ok) throw new Error(preview.message || "无法检查绑定状态。");
           let confirmRebind = false;
-          if (preview.operation === "rebind") {
+          let confirmRepair = false;
+          if (isRepair) {
+            if (preview.operation !== "existing_binding") {
+              throw new Error("当前凭证与邮箱没有可修复的绑定。");
+            }
+            confirmRepair = await requestRepairConfirmation(requestedEmail, preview.recoveryInProgress);
+            if (!confirmRepair) {
+              show("已取消修复，当前测试资格保持不变。", false);
+              submit.disabled = false;
+              repair.disabled = false;
+              return;
+            }
+          } else if (preview.operation === "rebind") {
             confirmRebind = await requestRebindConfirmation(
               requestedEmail,
               preview.remainingRebinds,
@@ -132,22 +152,32 @@ export function applicationPage(env: Env, nonce: string): string {
                 false
               );
               submit.disabled = false;
+              repair.disabled = false;
               return;
             }
           }
 
-          show(confirmRebind ? "正在换绑并发放测试资格…" : "正在发放测试资格…", false);
+          show(
+            confirmRepair
+              ? "正在重置并重新发放测试资格…"
+              : confirmRebind
+                ? "正在换绑并发放测试资格…"
+                : "正在发放测试资格…",
+            false
+          );
           const applyResponse = await fetch("/api/tf/apply", {
             method: "POST",
             headers: {"content-type":"application/json"},
             cache: "no-store",
             credentials: "same-origin",
-            body: JSON.stringify({email: requestedEmail, claimToken, turnstileToken, confirmRebind})
+            body: JSON.stringify({email: requestedEmail, claimToken, confirmRebind, confirmRepair})
           });
           const result = await applyResponse.json();
           if (!applyResponse.ok) throw new Error(result.message || "申请失败。");
           show(
-            result.status === "rebound"
+            result.status === "repaired"
+              ? "修复成功，请稍后打开 TestFlight 查看。"
+              : result.status === "rebound"
               ? "换绑成功，请检查 TestFlight 邀请。"
               : "申请成功，请检查 TestFlight 邀请。",
             false
@@ -156,6 +186,7 @@ export function applicationPage(env: Env, nonce: string): string {
         } catch (error) {
           show(error instanceof Error ? error.message : "申请失败，请稍后重试。", true);
           submit.disabled = false;
+          repair.disabled = false;
           if (window.turnstile) window.turnstile.reset();
         }
       });
@@ -168,11 +199,30 @@ export function applicationPage(env: Env, nonce: string): string {
 
       function requestRebindConfirmation(newEmail, remainingRebinds, recoveryInProgress) {
         return new Promise((resolve) => {
+          confirmTitle.textContent = "确认换绑邮箱";
           const consequences =
             "当前还剩 " + remainingRebinds + " 次换绑机会。旧邮箱在本 App 的 TestFlight 测试权限会被移除。";
           confirmMessage.textContent = recoveryInProgress
             ? "此前已确认换绑到 " + newEmail + "，系统正在恢复该操作。继续后会立即重试。" + consequences
             : "确认将此购买凭证换绑到 " + newEmail + " 吗？" + consequences;
+          confirmOverlay.hidden = false;
+          const finish = (confirmed) => {
+            confirmOverlay.hidden = true;
+            confirmCancel.onclick = null;
+            confirmSubmit.onclick = null;
+            resolve(confirmed);
+          };
+          confirmCancel.onclick = () => finish(false);
+          confirmSubmit.onclick = () => finish(true);
+        });
+      }
+
+      function requestRepairConfirmation(currentEmail, recoveryInProgress) {
+        return new Promise((resolve) => {
+          confirmTitle.textContent = "确认修复资格";
+          confirmMessage.textContent = recoveryInProgress
+            ? "系统正在恢复 " + currentEmail + " 的修复操作。继续后会立即重试。"
+            : "确认修复 " + currentEmail + " 的 TestFlight 资格吗？系统会先移除该邮箱在本 App 的测试权限，再重新加入“已购用户”分组。修复不会消耗换绑次数。";
           confirmOverlay.hidden = false;
           const finish = (confirmed) => {
             confirmOverlay.hidden = true;

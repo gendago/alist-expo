@@ -35,10 +35,14 @@ describe("申请页 CSP", () => {
     expect(body).not.toMatch(/[?&](?:tid|appTransactionId|transactionId)=/);
 
     expect(body).toContain('fetch("/api/tf/session"');
-    expect(body).toContain('body: JSON.stringify({appTransactionId})');
+    expect(body).toContain('body: JSON.stringify({appTransactionId, turnstileToken})');
     expect(body).toContain('/^[A-Za-z0-9_-]{32,256}$/');
     expect(body).toContain('fetch("/api/tf/preview"');
     expect(body).toContain("确认换绑邮箱");
+    expect(body).toContain("修复 TestFlight“已被移除”");
+    expect(body).toContain("确认修复资格");
+    expect(body).toContain("修复不会消耗换绑次数");
+    expect(body).toContain("修复成功，请稍后打开 TestFlight 查看。");
     expect(body).toContain("旧邮箱在本 App 的 TestFlight 测试权限会被移除");
     expect(body).toContain("preview.remainingRebinds");
     expect(body).not.toContain("preview.remainingAfter,");
@@ -50,8 +54,9 @@ describe("申请页 CSP", () => {
     expect(body).toContain('fetch("/api/tf/apply"');
     expect(body).toContain('const requestedEmail = email.value.trim()');
     expect(body).toContain(
-      'body: JSON.stringify({email: requestedEmail, claimToken, turnstileToken, confirmRebind})',
+      'body: JSON.stringify({email: requestedEmail, claimToken, confirmRebind, confirmRepair})',
     );
+    expect(body).not.toContain("claimToken, turnstileToken");
 
     expect(body.indexOf('fetch("/api/tf/session"')).toBeLessThan(
       body.indexOf('fetch("/api/tf/preview"'),
