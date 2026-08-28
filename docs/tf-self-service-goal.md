@@ -55,7 +55,8 @@ Turnstile 第三方脚本。
 3. 换绑时显示自定义确认框：明确目标邮箱、原邮箱将失去本 App 的 TestFlight 权限，以及当前
    还剩几次换绑机会。取消时不产生任何 ASC 副作用。
 4. `/api/tf/apply`：确认后只调用一次并消费短期 claim；换绑请求必须带
-   `confirmRebind: true`，显式修复必须带 `confirmRepair: true`。
+   `confirmRebind: true`；用户点击显式修复按钮后网页直接带
+   `confirmRepair: true` 执行，不再弹二次确认框。
 5. 成功页只提示申请或换绑成功，不显示剩余换绑次数。
 
 目标邮箱若已属于另一份购买凭证，拒绝本次操作并要求更换邮箱。达到两次成功换绑后，任何新邮箱

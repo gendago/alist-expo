@@ -131,13 +131,7 @@ export function applicationPage(env: Env, nonce: string): string {
             if (preview.operation !== "existing_binding") {
               throw new Error("当前凭证与邮箱没有可修复的绑定。");
             }
-            confirmRepair = await requestRepairConfirmation(requestedEmail, preview.recoveryInProgress);
-            if (!confirmRepair) {
-              show("已取消修复，当前测试资格保持不变。", false);
-              submit.disabled = false;
-              repair.disabled = false;
-              return;
-            }
+            confirmRepair = true;
           } else if (preview.operation === "rebind") {
             confirmRebind = await requestRebindConfirmation(
               requestedEmail,
@@ -217,23 +211,6 @@ export function applicationPage(env: Env, nonce: string): string {
         });
       }
 
-      function requestRepairConfirmation(currentEmail, recoveryInProgress) {
-        return new Promise((resolve) => {
-          confirmTitle.textContent = "确认修复资格";
-          confirmMessage.textContent = recoveryInProgress
-            ? "系统正在恢复 " + currentEmail + " 的修复操作。继续后会立即重试。"
-            : "确认修复 " + currentEmail + " 的 TestFlight 资格吗？系统会先移除该邮箱在本 App 的测试权限，再重新加入“已购用户”分组。修复不会消耗换绑次数。";
-          confirmOverlay.hidden = false;
-          const finish = (confirmed) => {
-            confirmOverlay.hidden = true;
-            confirmCancel.onclick = null;
-            confirmSubmit.onclick = null;
-            resolve(confirmed);
-          };
-          confirmCancel.onclick = () => finish(false);
-          confirmSubmit.onclick = () => finish(true);
-        });
-      }
     })();
   </script>
   <!-- 必须在内联脚本同步读取并清除 #tid 后，才允许加载第三方 Turnstile。 -->
