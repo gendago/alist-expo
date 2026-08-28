@@ -7,6 +7,10 @@ Cloudflare 账户当前只有一个 Secrets Store 容器，因此两者仅共享
 binding 方式复用；AList 自有密钥全部使用 `ALIST_TF_` 前缀。Worker 没有修改、轮换或删除
 Secrets Store 条目的代码路径。
 
+ASC 的 `betaTesters` 是账号级资源，因此按邮箱全局查询可能看到其他 App 的 tester。AList 只会
+复用已明确关联 AListServer App 或“已购用户”分组的 tester；只属于其他 App 的同邮箱记录会被
+忽略，并为 AListServer 创建独立 tester，绝不把跨 App tester ID 用于加组、邀请或撤权。
+
 ## 用户流程
 
 1. 商店版 App 在 iOS 16+/tvOS 16+ 读取 verified `AppTransaction.shared.appTransactionID`。

@@ -39,6 +39,7 @@ const MIGRATIONS = [
   "0009_tf_access_reliability.sql",
   "0010_reconcile_purchased_group.sql",
   "0011_pending_email_retry.sql",
+  "0012_retry_cross_app_tester.sql",
 ];
 
 async function applyMigrations(
@@ -150,7 +151,7 @@ describe("真实 workerd D1 迁移与并发语义", () => {
     }
   });
 
-  it("按 0001 到 0011 升级并保留历史 migration、换绑次数和恢复状态", async () => {
+  it("按 0001 到 0012 升级并保留历史 migration、换绑次数和恢复状态", async () => {
     const columns = await database.prepare(
       "PRAGMA table_info(tf_feishu_rebind_jobs)",
     ).all<{ name: string }>();
@@ -194,6 +195,55 @@ describe("真实 workerd D1 迁移与并发语义", () => {
       "SELECT name FROM sqlite_master WHERE type='table' AND name='tf_access_operations'",
     ).first<{ name: string }>();
     expect(accessOperationTable?.name).toBe("tf_access_operations");
+  });
+
+  it("将跨 App tester 的 409 终态初绑重置为可恢复任务", async () => {
+    const now = Date.now();
+    await database.prepare(
+      `INSERT INTO tf_bindings(
+        app_key, app_transaction_id_hmac, email_hmac, email_ciphertext,
+        asc_tester_id, status, asc_stage, beta_group_id, created_at, updated_at
+      ) VALUES (
+        'alist', 'cross-app-transaction', 'cross-app-email', 'ciphertext',
+        'foreign-tester', 'pending_asc', 'tester_found', 'old-group', ?, ?
+      )`,
+    ).bind(now, now).run();
+    const binding = await database.prepare(
+      "SELECT id FROM tf_bindings WHERE app_transaction_id_hmac = 'cross-app-transaction'",
+    ).first<{ id: number }>();
+    await database.prepare(
+      `INSERT INTO tf_access_operations(
+        id, app_key, binding_id, app_transaction_id_hmac, operation_type,
+        target_group_id, tester_id, stage, status, attempt_count, max_attempts,
+        next_attempt_at, error_kind, last_error, last_http_status, last_asc_code,
+        created_at, updated_at
+      ) VALUES (
+        '4c0993121743d436b10897dfe3384d1b', 'alist', ?, 'cross-app-transaction', 'apply',
+        'purchased-group', 'foreign-tester', 'group_adding', 'failed_terminal',
+        1, 8, ?, 'terminal', 'asc_state_error', 409, 'STATE_ERROR', ?, ?
+      )`,
+    ).bind(binding!.id, now, now, now).run();
+
+    await applyMigrations(database, ["0012_retry_cross_app_tester.sql"]);
+
+    expect(await database.prepare(
+      "SELECT asc_tester_id, asc_stage, status FROM tf_bindings WHERE id = ?",
+    ).bind(binding!.id).first()).toMatchObject({
+      asc_tester_id: null,
+      asc_stage: "none",
+      status: "pending_asc",
+    });
+    expect(await database.prepare(
+      `SELECT tester_id, stage, status, attempt_count, last_http_status, last_asc_code
+       FROM tf_access_operations WHERE id = '4c0993121743d436b10897dfe3384d1b'`,
+    ).first()).toMatchObject({
+      tester_id: null,
+      stage: "tester_adding",
+      status: "active",
+      attempt_count: 0,
+      last_http_status: null,
+      last_asc_code: null,
+    });
   });
 
   it("D1 batch 中途失败时原子回滚", async () => {

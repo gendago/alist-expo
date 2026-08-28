@@ -171,4 +171,12 @@ preview 错误边界与 D1 状态正常，旧飞书路径返回 404，`miraplay.
 其中 2 条已收敛为 active 且分组快照统一到“已购用户”，另 1 条跨 App tester 被 ASC 明确以
 `409 STATE_ERROR` 拒绝并进入脱敏终态，不会无限重试或影响其他 App。
 
+同日进一步确认该终态源于账号级邮箱回退误选了只属于其他 App 的 tester。AList 已停止复用
+任何未关联 AListServer App/目标分组的 tester，并通过
+`0012_retry_cross_app_tester.sql` 精确恢复该操作，部署 Worker 版本
+`417413c0-07b2-431e-9a73-1f5f558384f9`。类型检查、10 个测试文件/80 项测试、生产隔离检查、
+启动分析和显式 dry-run 均通过。恢复后原有 3 条 binding 均为 `active / invited`；部署期间新增的
+第 4 条 binding 也已正常完成。当前 4 条记录全部属于“已购用户”分组；修复流程新建的
+AListServer tester ID 与原其他 App tester ID 不同，换绑次数均保持 0。
+
 本记录不代表真实购买样本验收已完成；Production 凭证和真实 TestFlight 邮箱仍按上一节由人工验收。

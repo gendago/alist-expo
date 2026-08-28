@@ -199,4 +199,50 @@ describe("App Store Connect tester 强幂等", () => {
     });
     expect(listQueries).toHaveLength(3);
   });
+
+  it("同邮箱仅存在于其他 App 时不复用跨 App tester", async () => {
+    const requests: Array<{ pathname: string; appFilter: string | null }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: URL | RequestInfo) => {
+      const url = new URL(input instanceof URL ? input.href : String(input));
+      requests.push({
+        pathname: url.pathname,
+        appFilter: url.searchParams.get("filter[apps]"),
+      });
+      if (url.pathname === "/v1/betaTesters") {
+        if (url.searchParams.has("filter[apps]")) return json({ data: [] });
+        return json({
+          data: [
+            {
+              type: "betaTesters",
+              id: "tester-other-app",
+              attributes: { email: "buyer@example.com", state: null },
+            },
+          ],
+        });
+      }
+      if (url.pathname.endsWith("/relationships/apps")) {
+        return relationship("apps", ["other-app"]);
+      }
+      if (url.pathname.endsWith("/relationships/betaGroups")) {
+        return relationship("betaGroups", ["other-group"]);
+      }
+      throw new Error(`unexpected ASC request: ${url.pathname}`);
+    }));
+
+    await expect(
+      client().findTester(
+        "buyer@example.com",
+        "alist-app",
+        "purchased-group",
+      ),
+    ).resolves.toBeNull();
+    expect(requests).toContainEqual({
+      pathname: "/v1/betaTesters",
+      appFilter: "alist-app",
+    });
+    expect(requests).toContainEqual({
+      pathname: "/v1/betaTesters",
+      appFilter: null,
+    });
+  });
 });

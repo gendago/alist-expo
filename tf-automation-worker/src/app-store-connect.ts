@@ -182,9 +182,10 @@ export class AppStoreConnectClient {
         (targetGroupId !== undefined && tester.groupIds.includes(targetGroupId)),
     );
     if (associated.length === 1) return associated[0] ?? null;
-    if (associated.length === 0 && hydrated.length === 1) {
-      return hydrated[0] ?? null;
-    }
+    // betaTesters 是 ASC 账号级资源；同邮箱可能只属于账号中的其他 App。
+    // 这种记录不能作为当前 App 的 tester 复用，否则 Apple 会以 STATE_ERROR
+    // 拒绝加入当前 App 的分组。返回 null，让调用方为当前 App 创建独立 tester。
+    if (associated.length === 0) return null;
     throw new AppError(
       "temporarily_unavailable",
       "multiple beta tester records",
